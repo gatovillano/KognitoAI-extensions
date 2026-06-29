@@ -43,28 +43,52 @@ SHARE_ROUTE_FILE = os.path.join(SHARE_ROUTE_DIR, "page.tsx")
 API_MAIN_TARGET = os.path.join(BASE_DIR, "api/main.py")
 API_MAIN_BACKUP = os.path.join(BASE_DIR, "api/main.py.bak")
 
-PAGE_TRANSFORMED_CONTENT = """'use client';
+
+def _relative_import(from_file: str, to_file: str) -> str:
+    """Calcula la ruta de importación relativa desde from_file hacia to_file."""
+    from_dir = os.path.dirname(from_file)
+    to_abs = os.path.abspath(to_file)
+    from_abs = os.path.abspath(from_dir)
+    
+    # Calcular ruta relativa desde from_abs hasta to_abs
+    rel_path = os.path.relpath(to_abs, from_abs)
+    # Convertir a formato de importación de JS/TS
+    return rel_path.replace(os.sep, '/')
+
+
+# Calcular rutas dinámicamente
+KOGNIPHOTOS_IMPORT_PATH = _relative_import(
+    PAGE_TARGET,
+    os.path.join(EXT_DIR, "frontend", "KogniPhotosGalleryView.tsx")
+)
+
+SELECTION_PUBLIC_IMPORT_PATH = _relative_import(
+    SHARE_ROUTE_FILE,
+    os.path.join(EXT_DIR, "frontend", "SelectionPublicPage.tsx")
+)
+
+PAGE_TRANSFORMED_CONTENT = f"""'use client';
 
 import React from 'react';
-import { KogniPhotosGalleryView } from '../../../../extensions/gallery_selection_panel/frontend/KogniPhotosGalleryView';
+import {{ KogniPhotosGalleryView }} from '{KOGNIPHOTOS_IMPORT_PATH}';
 
-export default function GalleriesPage() {
+export default function GalleriesPage() {{
   return <KogniPhotosGalleryView />;
-}
+}}
 """
 
-SHARE_ROUTE_CONTENT = """'use client';
+SHARE_ROUTE_CONTENT = f"""'use client';
 
 import React from 'react';
-import { useParams } from 'next/navigation';
-import { SelectionPublicPage } from '../../../../../extensions/gallery_selection_panel/frontend/SelectionPublicPage';
+import {{ useParams }} from 'next/navigation';
+import {{ SelectionPublicPage }} from '{SELECTION_PUBLIC_IMPORT_PATH}';
 
-export default function PublicSelectionRoute() {
+export default function PublicSelectionRoute() {{
   const params = useParams();
   const token = (params?.token || '') as string;
 
-  return <SelectionPublicPage token={token} />;
-}
+  return <SelectionPublicPage token={{token}} />;
+}}
 """
 
 API_ROUTER_INJECTION = """app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])
@@ -80,9 +104,10 @@ async def create_database_tables():
     """Dynamically initializes SQLAlchemy models and database schema updates."""
     try:
         sys.path.insert(0, BASE_DIR)
+        sys.path.insert(0, os.path.dirname(EXT_DIR))  # Allow importing gallery_selection_panel.backend
         from sqlalchemy import text
         from core.database import engine, Base
-        import extensions.gallery_selection_panel.backend.models  # Registers models with Base
+        import gallery_selection_panel.backend.models  # Registers models with Base
         async with engine.begin() as conn:
             await conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS workspace_id UUID;"))
             await conn.run_sync(Base.metadata.create_all)
@@ -114,6 +139,10 @@ def restart_local_servers():
 
 def install():
     print("🚀 Instalando Extensión: Panel de Selección de Galerías & KogniPhotos UI...")
+    print(f"  BASE_DIR detectado: {BASE_DIR}")
+    print(f"  EXT_DIR: {EXT_DIR}")
+    print(f"  Ruta importación galería: {KOGNIPHOTOS_IMPORT_PATH}")
+    print(f"  Ruta importación selección: {SELECTION_PUBLIC_IMPORT_PATH}")
     
     # 1. Frontend - Transformed Gallery Page
     if not os.path.exists(PAGE_BACKUP) and os.path.exists(PAGE_TARGET):
