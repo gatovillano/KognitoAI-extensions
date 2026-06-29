@@ -186,6 +186,14 @@ def install():
                 shutil.copyfile(API_MAIN_TARGET, API_MAIN_BACKUP)
                 print("  ✓ Copia de seguridad creada para api/main.py.")
             
+            # Add import for the extension router
+            import_line = "from api.gallery_selection_panel import router as gallery_selection_extension_router\n"
+            if import_line.strip() not in content and "api.gallery_selection_panel" not in content:
+                # Find a good place to insert the import (after other router imports)
+                import_insert_marker = "from api.galleries import router as galleries_router"
+                if import_insert_marker in content:
+                    content = content.replace(import_insert_marker, import_insert_marker + "\n" + import_line)
+            
             target_str = 'app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])'
             if target_str in content:
                 new_content = content.replace(target_str, API_ROUTER_INJECTION)
