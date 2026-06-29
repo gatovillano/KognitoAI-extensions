@@ -47,7 +47,7 @@ else
         git clone "${EXT_REPO_URL}" "${EXT_REPO_DIR}"
     else
         echo -e "${YELLOW}🔄 Actualizando repositorio de extensiones...${NC}"
-        git -C "${EXT_REPO_DIR}" pull origin main || true
+        git -C "${EXT_REPO_DIR}" fetch origin && git -C "${EXT_REPO_DIR}" reset --hard origin/main || true
     fi
     EXT_GALLERY_DIR="${EXT_REPO_DIR}/gallery_selection_panel"
 fi

@@ -72,13 +72,13 @@ import {{ SelectionPublicPage }} from '{SELECTION_PUBLIC_IMPORT_PATH}';
 
 export default function PublicSelectionRoute() {{
   const params = useParams();
-  const token = params?.token as string;
+  const token = (params?.token as string) || '';
   return <SelectionPublicPage token={{token}} />;
 }}
 """
 
 API_ROUTER_INJECTION = """app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])
-app.include_router(gallery_selection_extension_router, prefix="/api/selection", tags=["selection-extension"])"""
+app.include_router(gallery_selection_extension_router)"""
 
 # Frontend files to copy/remove
 FRONTEND_FILES = [
@@ -187,7 +187,7 @@ def install():
                 print("  ✓ Copia de seguridad creada para api/main.py.")
             
             # Add import for the extension router
-            import_line = "from api.gallery_selection_panel import router as gallery_selection_extension_router\n"
+            import_line = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router\n"
             if import_line.strip() not in content and "api.gallery_selection_panel" not in content:
                 # Find a good place to insert the import (after other router imports)
                 import_insert_marker = "from api.galleries import router as galleries_router"
