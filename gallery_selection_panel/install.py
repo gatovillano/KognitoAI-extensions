@@ -85,18 +85,29 @@ import {{ SelectionPublicPage }} from '{SELECTION_PUBLIC_IMPORT_PATH}';
 
 export default function PublicSelectionRoute() {{
   const params = useParams();
-  const token = (params?.token || '') as string;
+def run_npm_install():
+    """Installs frontend dependencies in the KognitoAI core."""
+    print("\n📦 Instalando dependencias del frontend (npm install)...")
+    try:
+        res = subprocess.run(["npm", "install"], cwd=BASE_DIR, check=False)
+        if res.returncode == 0:
+            print("  ✓ Dependencias instaladas correctamente.")
+        else:
+            print("  ⚠ Advertencia: Algunas dependencias no se pudieron instalar.")
+    except Exception as e:
+        print(f"  ⚠ No se pudo ejecutar npm install: {e}")
 
-  return <SelectionPublicPage token={{token}} />;
-}}
-"""
-
-API_ROUTER_INJECTION = """app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])
-try:
-    from extensions.gallery_selection_panel.backend.router import router as gallery_selection_extension_router
-    app.include_router(gallery_selection_extension_router)
-    logger.info("Extensión Gallery Selection Panel cargada con éxito.")
-except Exception as e:
+def run_build():
+    """Builds the frontend production bundle using npm run build."""
+    print("\n🛠️ Ejecutando build del frontend (npm run build)...")
+    try:
+        res = subprocess.run(["npm", "run", "build"], cwd=BASE_DIR, check=False)
+        if res.returncode == 0:
+            print("  ✓ Build del frontend completado exitosamente.")
+        else:
+            print("  ⚠ Advertencia: Ocurrió un detalle en el build del frontend.")
+    except Exception as e:
+        print(f"  ⚠ No se pudo ejecutar npm run build: {e}")except Exception as e:
     logger.warning(f"No se pudo cargar la extensión Gallery Selection Panel: {e}")
 """
 
