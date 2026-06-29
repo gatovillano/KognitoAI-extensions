@@ -72,7 +72,7 @@ import {{ SelectionPublicPage }} from '{SELECTION_PUBLIC_IMPORT_PATH}';
 
 export default function PublicSelectionRoute() {{
   const params = useParams();
-  const token = params.token as string;
+  const token = params?.token as string;
   return <SelectionPublicPage token={{token}} />;
 }}
 """
