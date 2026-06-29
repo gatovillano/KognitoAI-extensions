@@ -85,6 +85,15 @@ import {{ SelectionPublicPage }} from '{SELECTION_PUBLIC_IMPORT_PATH}';
 
 export default function PublicSelectionRoute() {{
   const params = useParams();
+  const token = params.token as string;
+  return <SelectionPublicPage token={{token}} />;
+}}
+"""
+
+API_ROUTER_INJECTION = """app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])
+app.include_router(gallery_selection_extension_router, prefix="/api/selection", tags=["selection-extension"])"""
+
+
 def run_npm_install():
     """Installs frontend dependencies in the KognitoAI core."""
     print("\n📦 Instalando dependencias del frontend (npm install)...")
@@ -107,9 +116,17 @@ def run_build():
         else:
             print("  ⚠ Advertencia: Ocurrió un detalle en el build del frontend.")
     except Exception as e:
-        print(f"  ⚠ No se pudo ejecutar npm run build: {e}")except Exception as e:
-    logger.warning(f"No se pudo cargar la extensión Gallery Selection Panel: {e}")
-"""
+        print(f"  ⚠ No se pudo ejecutar npm run build: {e}")
+
+def restart_local_servers():
+    """Attempts to notify or restart active local dev/api processes."""
+    print("\n🔄 Reiniciando servicios locales...")
+    try:
+        # Check if uvicorn / python run_api.py is active and reload gracefully if needed
+        subprocess.run(["pkill", "-f", "run_api.py"], check=False)
+        print("  ✓ Reiniciada señal del servidor Backend API.")
+    except Exception as e:
+        print(f"  ⚠ Nota sobre proceso backend: {e}")
 
 async def create_database_tables():
     """Dynamically initializes SQLAlchemy models and database schema updates."""
@@ -126,27 +143,6 @@ async def create_database_tables():
     except Exception as e:
         print(f"  ⚠ Nota sobre base de datos: {e}")
 
-def run_build():
-    """Builds the frontend production bundle using npm run build."""
-    print("\n🛠️ Ejecutando build del frontend (npm run build)...")
-    try:
-        res = subprocess.run(["npm", "run", "build"], cwd=BASE_DIR, check=False)
-        if res.returncode == 0:
-            print("  ✓ Build del frontend completado exitosamente.")
-        else:
-            print("  ⚠ Advertencia: Ocurrió un detalle en el build del frontend.")
-    except Exception as e:
-        print(f"  ⚠ No se pudo ejecutar npm run build: {e}")
-
-def restart_local_servers():
-    """Attempts to notify or restart active local dev/api processes."""
-    print("\n🔄 Reiniciando servicios locales...")
-    try:
-        # Check if uvicorn / python run_api.py is active and reload gracefully if needed
-        subprocess.run(["pkill", "-f", "run_api.py"], check=False)
-        print("  ✓ Reiniciada señal del servidor Backend API.")
-    except Exception as e:
-        print(f"  ⚠ Nota sobre proceso backend: {e}")
 
 def install():
     print("🚀 Instalando Extensión: Panel de Selección de Galerías & KogniPhotos UI...")
@@ -190,7 +186,8 @@ def install():
     # 4. Database Setup
     asyncio.run(create_database_tables())
 
-    # 5. Frontend Build & Restart
+    # 5. Install Dependencies, Build & Restart
+    run_npm_install()
     run_build()
     restart_local_servers()
 
