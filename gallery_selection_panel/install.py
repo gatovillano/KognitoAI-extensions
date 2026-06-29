@@ -204,30 +204,36 @@ def install():
 def uninstall():
     print("🔄 Desinstalando Extensión y restaurando sistema base...")
 
-    # 1. Frontend Components Cleanup
+    # 1. Backend Cleanup
+    backend_dst = os.path.join(BASE_DIR, "api", "gallery_selection_panel")
+    if os.path.exists(backend_dst):
+        shutil.rmtree(backend_dst)
+        print("  ✓ Backend api/gallery_selection_panel/ eliminado.")
+
+    # 2. Frontend Components Cleanup
     for fname, target in frontend_files:
         if os.path.exists(target):
             os.remove(target)
             print(f"  ✓ Componente eliminado: {fname}")
 
-    # 2. Frontend Page Restore
+    # 3. Frontend Page Restore
     if os.path.exists(PAGE_BACKUP):
         shutil.copyfile(PAGE_BACKUP, PAGE_TARGET)
         os.remove(PAGE_BACKUP)
         print("  ✓ Vista de galerías base restaurada.")
 
-    # 3. Public Share Route Cleanup
+    # 4. Public Share Route Cleanup
     if os.path.exists(SHARE_ROUTE_FILE):
         os.remove(SHARE_ROUTE_FILE)
         print("  ✓ Ruta pública de selección eliminada.")
 
-    # 4. Backend API Restore
+    # 5. Backend API Restore
     if os.path.exists(API_MAIN_BACKUP):
         shutil.copyfile(API_MAIN_BACKUP, API_MAIN_TARGET)
         os.remove(API_MAIN_BACKUP)
         print("  ✓ Backend api/main.py restaurado a estado original.")
 
-    # 5. Rebuild & Restart
+    # 6. Rebuild & Restart
     run_build()
     restart_local_servers()
 
