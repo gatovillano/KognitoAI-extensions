@@ -43,29 +43,16 @@ SHARE_ROUTE_FILE = os.path.join(SHARE_ROUTE_DIR, "page.tsx")
 API_MAIN_TARGET = os.path.join(BASE_DIR, "api/main.py")
 API_MAIN_BACKUP = os.path.join(BASE_DIR, "api/main.py.bak")
 
+# Component installation paths in the base project
+COMPONENTS_DIR = os.path.join(BASE_DIR, "src/components")
+KOGNIPHOTOS_TARGET = os.path.join(COMPONENTS_DIR, "KogniPhotosGalleryView.tsx")
+SELECTION_PUBLIC_TARGET = os.path.join(COMPONENTS_DIR, "SelectionPublicPage.tsx")
+EXTENSION_SHARE_MODAL_TARGET = os.path.join(COMPONENTS_DIR, "ExtensionShareModal.tsx")
+RECEIVED_SELECTIONS_TARGET = os.path.join(COMPONENTS_DIR, "ReceivedSelectionsView.tsx")
 
-def _relative_import(from_file: str, to_file: str) -> str:
-    """Calcula la ruta de importación relativa desde from_file hacia to_file."""
-    from_dir = os.path.dirname(from_file)
-    to_abs = os.path.abspath(to_file)
-    from_abs = os.path.abspath(from_dir)
-    
-    # Calcular ruta relativa desde from_abs hasta to_abs
-    rel_path = os.path.relpath(to_abs, from_abs)
-    # Convertir a formato de importación de JS/TS
-    return rel_path.replace(os.sep, '/')
-
-
-# Calcular rutas dinámicamente
-KOGNIPHOTOS_IMPORT_PATH = _relative_import(
-    PAGE_TARGET,
-    os.path.join(EXT_DIR, "frontend", "KogniPhotosGalleryView.tsx")
-)
-
-SELECTION_PUBLIC_IMPORT_PATH = _relative_import(
-    SHARE_ROUTE_FILE,
-    os.path.join(EXT_DIR, "frontend", "SelectionPublicPage.tsx")
-)
+# Internal import paths (within the project)
+KOGNIPHOTOS_IMPORT_PATH = "@/components/KogniPhotosGalleryView"
+SELECTION_PUBLIC_IMPORT_PATH = "@/components/SelectionPublicPage"
 
 PAGE_TRANSFORMED_CONTENT = f"""'use client';
 
@@ -92,7 +79,6 @@ export default function PublicSelectionRoute() {{
 
 API_ROUTER_INJECTION = """app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])
 app.include_router(gallery_selection_extension_router, prefix="/api/selection", tags=["selection-extension"])"""
-
 
 def run_npm_install():
     """Installs frontend dependencies in the KognitoAI core."""
@@ -148,8 +134,30 @@ def install():
     print("🚀 Instalando Extensión: Panel de Selección de Galerías & KogniPhotos UI...")
     print(f"  BASE_DIR detectado: {BASE_DIR}")
     print(f"  EXT_DIR: {EXT_DIR}")
-    print(f"  Ruta importación galería: {KOGNIPHOTOS_IMPORT_PATH}")
-    print(f"  Ruta importación selección: {SELECTION_PUBLIC_IMPORT_PATH}")
+    
+    # 0. Copy frontend components to base project (required for Next.js module resolution)
+    os.makedirs(COMPONENTS_DIR, exist_ok=True)
+    frontend_files = [
+        ("KogniPhotosGalleryView.tsx", KOGNIPHOTOS_TARGET),
+        ("SelectionPublicPage.tsx", SELECTION_PUBLIC_TARGET),
+        ("ExtensionShareModal.tsx", EXTENSION_SHARE_MODAL_TARGET),
+        ("ReceivedSelectionsView.tsx", RECEIVED_SELECTIONS_TARGET),
+    ]
+    for fname, target in frontend_files:
+        src = os.path.join(EXT_DIR, "frontend", fname)
+        if os.path.exists(src):
+            shutil.copyfile(src, target)
+            print(f"  ✓ Componente copiado: {fname}")
+    
+    # 0.5 Copy backend extension to api/ directory
+    backend_src = os.path.join(EXT_DIR, "backend")
+    backend_dst = os.path.join(BASE_DIR, "api", "gallery_selection_panel")
+    os.makedirs(os.path.dirname(backend_dst), exist_ok=True)
+    if os.path.exists(backend_src):
+        if os.path.exists(backend_dst):
+            shutil.rmtree(backend_dst)
+        shutil.copytree(backend_src, backend_dst)
+        print(f"  ✓ Backend copiado a api/gallery_selection_panel/")
     
     # 1. Frontend - Transformed Gallery Page
     if not os.path.exists(PAGE_BACKUP) and os.path.exists(PAGE_TARGET):
@@ -196,24 +204,30 @@ def install():
 def uninstall():
     print("🔄 Desinstalando Extensión y restaurando sistema base...")
 
-    # 1. Frontend Page Restore
+    # 1. Frontend Components Cleanup
+    for fname, target in frontend_files:
+        if os.path.exists(target):
+            os.remove(target)
+            print(f"  ✓ Componente eliminado: {fname}")
+
+    # 2. Frontend Page Restore
     if os.path.exists(PAGE_BACKUP):
         shutil.copyfile(PAGE_BACKUP, PAGE_TARGET)
         os.remove(PAGE_BACKUP)
         print("  ✓ Vista de galerías base restaurada.")
 
-    # 2. Public Share Route Cleanup
+    # 3. Public Share Route Cleanup
     if os.path.exists(SHARE_ROUTE_FILE):
         os.remove(SHARE_ROUTE_FILE)
         print("  ✓ Ruta pública de selección eliminada.")
 
-    # 3. Backend API Restore
+    # 4. Backend API Restore
     if os.path.exists(API_MAIN_BACKUP):
         shutil.copyfile(API_MAIN_BACKUP, API_MAIN_TARGET)
         os.remove(API_MAIN_BACKUP)
         print("  ✓ Backend api/main.py restaurado a estado original.")
 
-    # 4. Rebuild & Restart
+    # 5. Rebuild & Restart
     run_build()
     restart_local_servers()
 
