@@ -1,0 +1,4 @@
+kognito-ai/core/session.db
+kognito-ai/core/server.db
+kognito-ai/core/cache/*
+.kogniterm
