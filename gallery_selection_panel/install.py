@@ -80,6 +80,14 @@ export default function PublicSelectionRoute() {{
 API_ROUTER_INJECTION = """app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])
 app.include_router(gallery_selection_extension_router, prefix="/api/selection", tags=["selection-extension"])"""
 
+# Frontend files to copy/remove
+FRONTEND_FILES = [
+    ("KogniPhotosGalleryView.tsx", KOGNIPHOTOS_TARGET),
+    ("SelectionPublicPage.tsx", SELECTION_PUBLIC_TARGET),
+    ("ExtensionShareModal.tsx", EXTENSION_SHARE_MODAL_TARGET),
+    ("ReceivedSelectionsView.tsx", RECEIVED_SELECTIONS_TARGET),
+]
+
 def run_npm_install():
     """Installs frontend dependencies in the KognitoAI core."""
     print("\n📦 Instalando dependencias del frontend (npm install)...")
@@ -137,13 +145,7 @@ def install():
     
     # 0. Copy frontend components to base project (required for Next.js module resolution)
     os.makedirs(COMPONENTS_DIR, exist_ok=True)
-    frontend_files = [
-        ("KogniPhotosGalleryView.tsx", KOGNIPHOTOS_TARGET),
-        ("SelectionPublicPage.tsx", SELECTION_PUBLIC_TARGET),
-        ("ExtensionShareModal.tsx", EXTENSION_SHARE_MODAL_TARGET),
-        ("ReceivedSelectionsView.tsx", RECEIVED_SELECTIONS_TARGET),
-    ]
-    for fname, target in frontend_files:
+    for fname, target in FRONTEND_FILES:
         src = os.path.join(EXT_DIR, "frontend", fname)
         if os.path.exists(src):
             shutil.copyfile(src, target)
@@ -211,7 +213,7 @@ def uninstall():
         print("  ✓ Backend api/gallery_selection_panel/ eliminado.")
 
     # 2. Frontend Components Cleanup
-    for fname, target in frontend_files:
+    for fname, target in FRONTEND_FILES:
         if os.path.exists(target):
             os.remove(target)
             print(f"  ✓ Componente eliminado: {fname}")
