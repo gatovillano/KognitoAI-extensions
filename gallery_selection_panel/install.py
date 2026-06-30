@@ -204,6 +204,26 @@ def install():
     # 4. Database Setup
     asyncio.run(create_database_tables())
 
+    # 4.5 Next.js Config Rewrite Setup
+    config_path = os.path.join(BASE_DIR, "next.config.mjs")
+    if os.path.exists(config_path):
+        with open(config_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        if "/thumbnails/:path*" not in content:
+            if "source: '/media/:path*'" in content:
+                content = content.replace(
+                    "source: '/media/:path*',\n        destination: `${apiServerUrl}/media/:path*`,",
+                    "source: '/media/:path*',\n        destination: `${apiServerUrl}/media/:path*`,\n      },\n      {\n        source: '/thumbnails/:path*',\n        destination: `${apiServerUrl}/thumbnails/:path*`,"
+                )
+            elif 'source: "/media/:path*"' in content:
+                content = content.replace(
+                    'source: "/media/:path*",\n        destination: `${apiServerUrl}/media/:path*`,',
+                    'source: "/media/:path*",\n        destination: `${apiServerUrl}/media/:path*`,\n      },\n      {\n        source: "/thumbnails/:path*",\n        destination: `${apiServerUrl}/thumbnails/:path*`,'
+                )
+            with open(config_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            print("  ✓ Regla de rewrite para /thumbnails agregada a next.config.mjs.")
+
     # 5. Install Dependencies, Build & Restart
     run_npm_install()
     run_build()
@@ -242,6 +262,32 @@ def uninstall():
         shutil.copyfile(API_MAIN_BACKUP, API_MAIN_TARGET)
         os.remove(API_MAIN_BACKUP)
         print("  ✓ Backend api/main.py restaurado a estado original.")
+
+    # 5.5 Next.js Config Rewrite Cleanup
+    config_path = os.path.join(BASE_DIR, "next.config.mjs")
+    if os.path.exists(config_path):
+        with open(config_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        if "/thumbnails/:path*" in content:
+            content = content.replace(
+                "      {\n        source: '/thumbnails/:path*',\n        destination: `${apiServerUrl}/thumbnails/:path*`,\n      },\n",
+                ""
+            )
+            content = content.replace(
+                '      {\n        source: "/thumbnails/:path*",\n        destination: `${apiServerUrl}/thumbnails/:path*`,\n      },\n',
+                ""
+            )
+            content = content.replace(
+                "      {\n        source: '/thumbnails/:path*',\n        destination: `${apiServerUrl}/thumbnails/:path*`,\n      },",
+                ""
+            )
+            content = content.replace(
+                '      {\n        source: "/thumbnails/:path*",\n        destination: `${apiServerUrl}/thumbnails/:path*`,\n      },',
+                ""
+            )
+            with open(config_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            print("  ✓ Regla de rewrite para /thumbnails eliminada de next.config.mjs.")
 
     # 6. Rebuild & Restart
     run_build()
