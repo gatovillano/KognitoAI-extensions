@@ -11,7 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
-import { Check, Send, Sparkles, Lock, MessageSquare, Image as ImageIcon, CheckCircle } from 'lucide-react';
+import { Check, Send, Sparkles, Lock, MessageSquare, Image as ImageIcon, CheckCircle, ZoomIn } from 'lucide-react';
+import Lightbox from 'yet-another-react-lightbox';
+import 'yet-another-react-lightbox/styles.css';
 
 interface PhotoResponse {
   id: string;
@@ -50,6 +52,8 @@ export const SelectionPublicPage: React.FC<{ token: string }> = ({ token }) => {
 
   const [submitting, setSubmitting] = useState(false);
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const fetchPanelData = useCallback(async (pwd?: string) => {
     setLoading(true);
@@ -239,21 +243,27 @@ export const SelectionPublicPage: React.FC<{ token: string }> = ({ token }) => {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {data.album.photos.map((photo) => {
+            {data.album.photos.map((photo, index) => {
               const isSelected = selectedPhotos.has(photo.id);
               const photoComment = selectedPhotos.get(photo.id);
+              const imageSrc = photo.thumbnail_path ? `/thumbnails/${photo.thumbnail_path}` : `/media/${photo.file_path}`;
 
               return (
-                <motion.div
+                <div
                   key={photo.id}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
                   onClick={() => toggleSelectPhoto(photo.id)}
-                  className={`relative aspect-square rounded-2xl overflow-hidden cursor-pointer border-2 transition-all duration-200 group shadow-sm ${
+                  className={`relative aspect-square rounded-2xl overflow-hidden cursor-pointer border-2 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] group shadow-sm will-change-transform ${
                     isSelected ? 'border-primary ring-4 ring-primary/20' : 'border-border/60 hover:border-primary/40'
                   }`}
                 >
-                  <NextImage src={`/media/${photo.file_path}`} alt="Foto" fill className="object-cover" />
+                  <NextImage
+                    src={imageSrc}
+                    alt="Foto"
+                    fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+                    className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                    loading="lazy"
+                  />
 
                   {/* Selection Overlay Checkmark */}
                   <div className={`absolute top-3 left-3 h-7 w-7 rounded-full flex items-center justify-center transition-all ${
@@ -261,6 +271,20 @@ export const SelectionPublicPage: React.FC<{ token: string }> = ({ token }) => {
                   }`}>
                     <Check className="h-4 w-4 stroke-[3]" />
                   </div>
+
+                  {/* Zoom button for Lightbox */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLightboxIndex(index);
+                      setLightboxOpen(true);
+                    }}
+                    className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    title="Ver en pantalla completa"
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </button>
 
                   {/* Comment trigger badge */}
                   {data.allow_comments && isSelected && (
@@ -284,7 +308,7 @@ export const SelectionPublicPage: React.FC<{ token: string }> = ({ token }) => {
                       💬 {photoComment}
                     </div>
                   )}
-                </motion.div>
+                </div>
               );
             })}
           </div>
@@ -326,6 +350,15 @@ export const SelectionPublicPage: React.FC<{ token: string }> = ({ token }) => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {data && (
+        <Lightbox
+          open={lightboxOpen}
+          close={() => setLightboxOpen(false)}
+          slides={data.album.photos.map(p => ({ src: `/media/${p.file_path}` }))}
+          index={lightboxIndex}
+        />
+      )}
     </div>
   );
 };

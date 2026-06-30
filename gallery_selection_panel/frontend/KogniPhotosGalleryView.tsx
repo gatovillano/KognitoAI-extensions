@@ -425,10 +425,10 @@ export const KogniPhotosGalleryView: React.FC = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {selectedAlbum.photos.map((photo, index) => {
                     const isSelected = selectedPhotos.has(photo.id);
+                    const imageSrc = photo.thumbnail_path ? `${apiBase}/thumbnails/${photo.thumbnail_path}` : `${apiBase}/media/${photo.file_path}`;
                     return (
-                      <motion.div
+                      <div
                         key={photo.id}
-                        whileHover={{ scale: 1.03 }}
                         onClick={() => {
                           if (isSelectionMode) {
                             togglePhotoSelection(photo.id);
@@ -437,11 +437,18 @@ export const KogniPhotosGalleryView: React.FC = () => {
                             setLightboxOpen(true);
                           }
                         }}
-                        className={`relative aspect-square rounded-2xl overflow-hidden bg-muted cursor-pointer shadow-sm group border transition-all ${
+                        className={`relative aspect-square rounded-2xl overflow-hidden bg-muted cursor-pointer shadow-sm group border transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] will-change-transform ${
                           isSelected ? 'ring-4 ring-primary border-primary' : 'border-border/40'
                         }`}
                       >
-                        <NextImage src={`${apiBase}/media/${photo.file_path}`} alt="Foto" fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <NextImage
+                          src={imageSrc}
+                          alt="Foto"
+                          fill
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+                          className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+                          loading="lazy"
+                        />
                         
                         {/* Favorite Badge */}
                         {photo.is_favorite && (
@@ -494,7 +501,7 @@ export const KogniPhotosGalleryView: React.FC = () => {
                             </DropdownMenu>
                           </div>
                         )}
-                      </motion.div>
+                      </div>
                     );
                   })}
                 </div>
