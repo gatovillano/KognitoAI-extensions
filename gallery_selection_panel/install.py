@@ -77,7 +77,7 @@ export default function PublicSelectionRoute() {{
 }}
 """
 
-IMPORT_LINE = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router, MEDIA_ROOT, THUMBNAIL_ROOT"
+IMPORT_LINE = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router"
 
 ROUTER_MARKERS = [
     'app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])',
@@ -151,7 +151,7 @@ def install():
     print("🚀 Instalando Extensión: Panel de Selección de Galerías & KogniPhotos UI...")
     print(f"  BASE_DIR detectado: {BASE_DIR}")
     print(f"  EXT_DIR: {EXT_DIR}")
-    
+
     # 0. Copy frontend components to base project (required for Next.js module resolution)
     os.makedirs(COMPONENTS_DIR, exist_ok=True)
     for fname, target in FRONTEND_FILES:
@@ -191,15 +191,16 @@ def install():
             content = f.read()
 
         # --- Phase 0: Sanitize any malformed import from a previous install ---
-        # Detect lines that import the router with wrong/extra symbols beyond the 3 expected.
-        # The correct import is: router, MEDIA_ROOT, THUMBNAIL_ROOT (exactly).
+        # Any import of gallery_selection_extension_router that includes extra symbols
+        # (e.g. MEDIA_ROOT, THUMBNAIL_ROOT) must be replaced with the clean router-only import.
+        # This is a line-level check: if a line contains the base import prefix AND extra commas.
         broken_patterns = [
             "from api.gallery_selection_panel.router import router as gallery_selection_extension_router,",
         ]
         has_broken = any(
-            p in content and IMPORT_LINE not in content
+            p in content
             for p in broken_patterns
-        )
+        ) and IMPORT_LINE not in content
         if has_broken:
             if not os.path.exists(API_MAIN_BACKUP):
                 shutil.copyfile(API_MAIN_TARGET, API_MAIN_BACKUP)
