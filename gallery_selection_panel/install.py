@@ -77,7 +77,7 @@ export default function PublicSelectionRoute() {{
 }}
 """
 
-IMPORT_LINE = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router"
+IMPORT_LINE = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router, MEDIA_ROOT, THUMBNAIL_ROOT"
 
 ROUTER_MARKERS = [
     'app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])',
@@ -190,19 +190,24 @@ def install():
         with open(API_MAIN_TARGET, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # --- Phase 0: Sanitize any broken import from a previous install ---
-        # Previous versions injected extra symbols (MEDIA_ROOT, THUMBNAIL_ROOT)
-        # that don't exist in the router. Replace any broken variant with the correct line.
-        broken_import_prefix = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router,"
-        if broken_import_prefix in content:
+        # --- Phase 0: Sanitize any malformed import from a previous install ---
+        # Detect lines that import the router with wrong/extra symbols beyond the 3 expected.
+        # The correct import is: router, MEDIA_ROOT, THUMBNAIL_ROOT (exactly).
+        broken_patterns = [
+            "from api.gallery_selection_panel.router import router as gallery_selection_extension_router,",
+        ]
+        has_broken = any(
+            p in content and IMPORT_LINE not in content
+            for p in broken_patterns
+        )
+        if has_broken:
             if not os.path.exists(API_MAIN_BACKUP):
                 shutil.copyfile(API_MAIN_TARGET, API_MAIN_BACKUP)
                 print("  ✓ Copia de seguridad creada para api/main.py (pre-sanitización).")
             lines = content.splitlines(keepends=True)
             sanitized = []
             for line in lines:
-                if broken_import_prefix in line:
-                    # Replace the entire broken line with the correct import
+                if any(p in line for p in broken_patterns) and IMPORT_LINE not in line:
                     sanitized.append(IMPORT_LINE + "\n")
                     print("  ✓ Import corrupto detectado y reemplazado en api/main.py.")
                 else:

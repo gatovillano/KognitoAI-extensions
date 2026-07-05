@@ -21,9 +21,19 @@ from .schemas import (
     PublicSelectionPanelResponse,
 )
 
+# Re-export path constants so api/main.py can import them if needed
+try:
+    from core.config import MEDIA_ROOT, THUMBNAIL_ROOT
+except ImportError:
+    import os
+    _BASE = os.path.expanduser("~/KognitoAI")
+    MEDIA_ROOT = os.path.join(_BASE, "media")
+    THUMBNAIL_ROOT = os.path.join(_BASE, "thumbnails")
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/galleries/extension/selection", tags=["gallery-selection-extension"])
+
 
 async def get_current_account(account_id: str = Depends(get_current_account_id), db: AsyncSession = Depends(get_db_session)) -> Account:
     account = await db.get(Account, uuid.UUID(account_id))
