@@ -184,12 +184,34 @@ def install():
     with open(SHARE_ROUTE_FILE, "w", encoding="utf-8") as f:
         f.write(SHARE_ROUTE_CONTENT)
     print("  ✓ Ruta pública de selección instalada en /share/selection/[token].")
-
+    
     # 3. Backend - API Router Injection
     if os.path.exists(API_MAIN_TARGET):
         with open(API_MAIN_TARGET, "r", encoding="utf-8") as f:
             content = f.read()
 
+        # --- Phase 0: Sanitize any broken import from a previous install ---
+        # Previous versions injected extra symbols (MEDIA_ROOT, THUMBNAIL_ROOT)
+        # that don't exist in the router. Replace any broken variant with the correct line.
+        broken_import_prefix = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router,"
+        if broken_import_prefix in content:
+            if not os.path.exists(API_MAIN_BACKUP):
+                shutil.copyfile(API_MAIN_TARGET, API_MAIN_BACKUP)
+                print("  ✓ Copia de seguridad creada para api/main.py (pre-sanitización).")
+            lines = content.splitlines(keepends=True)
+            sanitized = []
+            for line in lines:
+                if broken_import_prefix in line:
+                    # Replace the entire broken line with the correct import
+                    sanitized.append(IMPORT_LINE + "\n")
+                    print("  ✓ Import corrupto detectado y reemplazado en api/main.py.")
+                else:
+                    sanitized.append(line)
+            content = "".join(sanitized)
+            with open(API_MAIN_TARGET, "w", encoding="utf-8") as f:
+                f.write(content)
+
+        # --- Phase 1: Fresh injection (only if not already correctly installed) ---
         if "gallery_selection_extension_router" not in content:
             if not os.path.exists(API_MAIN_BACKUP):
                 shutil.copyfile(API_MAIN_TARGET, API_MAIN_BACKUP)
@@ -216,7 +238,7 @@ def install():
 
             # Step B: Insert app.include_router call (only if not already present)
             if "gallery_selection_extension_router" not in modified:
-                router_injection = 'app.include_router(gallery_selection_extension_router)'
+                router_injection = "app.include_router(gallery_selection_extension_router)"
                 replaced = False
                 for marker in ROUTER_MARKERS:
                     if marker in modified:
@@ -224,7 +246,7 @@ def install():
                         replaced = True
                         break
                 if not replaced:
-                    print("  ⚠ No se encontró la línea app.include_router(galleries_router...) en api/main.py.")
+                    print("  ⚠ No se encontró app.include_router(galleries_router...) en api/main.py.")
                     print("    Agrega manualmente: app.include_router(gallery_selection_extension_router)")
 
             # Step C: Write only if both modifications are present (atomic write)
@@ -234,6 +256,8 @@ def install():
                 print("  ✓ Router backend registrado con éxito en api/main.py.")
             else:
                 print("  ⚠ No se pudo inyectar el router en api/main.py — revisa el archivo manualmente.")
+        elif IMPORT_LINE in content:
+            print("  ✓ Router backend ya registrado correctamente en api/main.py.")
 
     # 4. Database Setup
     asyncio.run(create_database_tables())
