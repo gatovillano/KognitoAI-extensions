@@ -200,7 +200,7 @@ def install():
         has_broken = any(
             p in content
             for p in broken_patterns
-        ) and IMPORT_LINE not in content
+        )
         if has_broken:
             if not os.path.exists(API_MAIN_BACKUP):
                 shutil.copyfile(API_MAIN_TARGET, API_MAIN_BACKUP)
@@ -208,7 +208,7 @@ def install():
             lines = content.splitlines(keepends=True)
             sanitized = []
             for line in lines:
-                if any(p in line for p in broken_patterns) and IMPORT_LINE not in line:
+                if any(p in line for p in broken_patterns):
                     sanitized.append(IMPORT_LINE + "\n")
                     print("  ✓ Import corrupto detectado y reemplazado en api/main.py.")
                 else:
