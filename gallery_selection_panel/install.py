@@ -77,8 +77,17 @@ export default function PublicSelectionRoute() {{
 }}
 """
 
-API_ROUTER_INJECTION = """app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])
-app.include_router(gallery_selection_extension_router)"""
+IMPORT_LINE = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router"
+
+ROUTER_MARKERS = [
+    'app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])',
+    "app.include_router(galleries_router, prefix='/api/galleries', tags=['galleries'])",
+]
+
+IMPORT_MARKERS = [
+    "from api.galleries import router as galleries_router",
+    "from api.galleries.router import router as galleries_router",
+]
 
 # Frontend files to copy/remove
 FRONTEND_FILES = [
@@ -180,26 +189,51 @@ def install():
     if os.path.exists(API_MAIN_TARGET):
         with open(API_MAIN_TARGET, "r", encoding="utf-8") as f:
             content = f.read()
-        
+
         if "gallery_selection_extension_router" not in content:
             if not os.path.exists(API_MAIN_BACKUP):
                 shutil.copyfile(API_MAIN_TARGET, API_MAIN_BACKUP)
                 print("  ✓ Copia de seguridad creada para api/main.py.")
-            
-            # Add import for the extension router
-            import_line = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router\n"
-            if import_line.strip() not in content and "api.gallery_selection_panel" not in content:
-                # Find a good place to insert the import (after other router imports)
-                import_insert_marker = "from api.galleries import router as galleries_router"
-                if import_insert_marker in content:
-                    content = content.replace(import_insert_marker, import_insert_marker + "\n" + import_line)
-            
-            target_str = 'app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])'
-            if target_str in content:
-                new_content = content.replace(target_str, API_ROUTER_INJECTION)
+
+            modified = content
+
+            # Step A: Insert import line (only if not already present)
+            if IMPORT_LINE not in modified:
+                inserted = False
+                for marker in IMPORT_MARKERS:
+                    if marker in modified:
+                        modified = modified.replace(marker, marker + "\n" + IMPORT_LINE)
+                        inserted = True
+                        break
+                if not inserted:
+                    # Fallback: add import before the first app.include_router line
+                    lines = modified.splitlines(keepends=True)
+                    for i, line in enumerate(lines):
+                        if "app.include_router" in line:
+                            lines.insert(i, IMPORT_LINE + "\n")
+                            break
+                    modified = "".join(lines)
+
+            # Step B: Insert app.include_router call (only if not already present)
+            if "gallery_selection_extension_router" not in modified:
+                router_injection = 'app.include_router(gallery_selection_extension_router)'
+                replaced = False
+                for marker in ROUTER_MARKERS:
+                    if marker in modified:
+                        modified = modified.replace(marker, marker + "\n" + router_injection)
+                        replaced = True
+                        break
+                if not replaced:
+                    print("  ⚠ No se encontró la línea app.include_router(galleries_router...) en api/main.py.")
+                    print("    Agrega manualmente: app.include_router(gallery_selection_extension_router)")
+
+            # Step C: Write only if both modifications are present (atomic write)
+            if IMPORT_LINE in modified and "gallery_selection_extension_router" in modified:
                 with open(API_MAIN_TARGET, "w", encoding="utf-8") as f:
-                    f.write(new_content)
+                    f.write(modified)
                 print("  ✓ Router backend registrado con éxito en api/main.py.")
+            else:
+                print("  ⚠ No se pudo inyectar el router en api/main.py — revisa el archivo manualmente.")
 
     # 4. Database Setup
     asyncio.run(create_database_tables())
@@ -259,9 +293,24 @@ def uninstall():
 
     # 5. Backend API Restore
     if os.path.exists(API_MAIN_BACKUP):
+        # Preferred: restore from backup
         shutil.copyfile(API_MAIN_BACKUP, API_MAIN_TARGET)
         os.remove(API_MAIN_BACKUP)
-        print("  ✓ Backend api/main.py restaurado a estado original.")
+        print("  ✓ Backend api/main.py restaurado desde copia de seguridad.")
+    elif os.path.exists(API_MAIN_TARGET):
+        # Fallback: surgical removal of injected lines
+        with open(API_MAIN_TARGET, "r", encoding="utf-8") as f:
+            content = f.read()
+        if "gallery_selection_extension_router" in content:
+            router_call = "app.include_router(gallery_selection_extension_router)"
+            # Remove the router call line
+            lines = content.splitlines(keepends=True)
+            lines = [l for l in lines if router_call not in l and IMPORT_LINE not in l]
+            content = "".join(lines)
+            with open(API_MAIN_TARGET, "w", encoding="utf-8") as f:
+                f.write(content)
+            print("  ✓ Líneas de extensión eliminadas quirúrgicamente de api/main.py.")
+
 
     # 5.5 Next.js Config Rewrite Cleanup
     config_path = os.path.join(BASE_DIR, "next.config.mjs")
