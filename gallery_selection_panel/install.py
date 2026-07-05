@@ -228,29 +228,32 @@ def install():
             # Step A: Insert import line (only if not already present)
             if IMPORT_LINE not in modified:
                 inserted = False
-                for marker in IMPORT_MARKERS:
-                    if marker in modified:
-                        modified = modified.replace(marker, marker + "\n" + IMPORT_LINE)
+                lines = modified.splitlines(keepends=True)
+                for i, line in enumerate(lines):
+                    if any(marker in line for marker in IMPORT_MARKERS):
+                        # Insert our new import line AFTER the found marker line
+                        lines.insert(i + 1, IMPORT_LINE + "\n")
                         inserted = True
                         break
                 if not inserted:
                     # Fallback: add import before the first app.include_router line
-                    lines = modified.splitlines(keepends=True)
                     for i, line in enumerate(lines):
                         if "app.include_router" in line:
                             lines.insert(i, IMPORT_LINE + "\n")
                             break
-                    modified = "".join(lines)
+                modified = "".join(lines)
 
             # Step B: Insert app.include_router call (only if not already present)
             if "gallery_selection_extension_router" not in modified:
-                router_injection = "app.include_router(gallery_selection_extension_router)"
+                router_injection = "app.include_router(gallery_selection_extension_router)\n"
                 replaced = False
-                for marker in ROUTER_MARKERS:
-                    if marker in modified:
-                        modified = modified.replace(marker, marker + "\n" + router_injection)
+                lines = modified.splitlines(keepends=True)
+                for i, line in enumerate(lines):
+                    if any(marker in line for marker in ROUTER_MARKERS):
+                        lines.insert(i + 1, router_injection)
                         replaced = True
                         break
+                modified = "".join(lines)
                 if not replaced:
                     print("  ⚠ No se encontró app.include_router(galleries_router...) en api/main.py.")
                     print("    Agrega manualmente: app.include_router(gallery_selection_extension_router)")
