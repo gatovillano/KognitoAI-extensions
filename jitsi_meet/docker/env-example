@@ -1,0 +1,50 @@
+# Dirección base para la configuración persistente en el host
+CONFIG_DIR=~/.jitsi-meet-cfg
+
+# Zona horaria del servidor
+TZ=America/Santiago
+
+# Dominio público y URL del servidor Jitsi
+PUBLIC_URL=https://meet.tu-dominio.com
+
+# Puertos de red expuestos por el contenedor web de Nginx
+HTTP_PORT=8081
+HTTPS_PORT=8443
+
+# Configuración automática de certificados SSL con Let's Encrypt (opcional)
+ENABLE_LETSENCRYPT=1
+LETSENCRYPT_DOMAIN=meet.tu-dominio.com
+LETSENCRYPT_EMAIL=admin@tu-dominio.com
+
+# Puerto UDP de Jitsi Videobridge para transferencia de media WebRTC
+JVB_PORT=10000
+
+# IP pública del servidor VPS (¡CRÍTICO para que el audio y video funcionen externamente!)
+DOCKER_HOST_ADDRESS=192.168.1.100
+
+# Nivel de logs
+LOG_LEVEL=info
+
+# --- SECRETOS INTERNOS ---
+# Nota: Puedes generar estos secretos ejecutando:
+# ./gen-passwords.sh (provisto por el repo oficial de Jitsi) o manualmente con openssl rand -hex 16
+JICOFO_COMPONENT_SECRET=default_secret_jicofo_component
+JICOFO_AUTH_PASSWORD=default_secret_jicofo_auth
+JVB_AUTH_PASSWORD=default_secret_jvb_auth
+
+# --- CONFIGURACIÓN INTERNA XMPP ---
+XMPP_SERVER=xmpp.meet.jitsi
+XMPP_DOMAIN=meet.jitsi
+XMPP_AUTH_DOMAIN=auth.meet.jitsi
+XMPP_INTERNAL_MUC_DOMAIN=internal-muc.meet.jitsi
+JVB_BREWERY_MUC=jid-of-brewery-muc
+JICOFO_AUTH_USER=focus
+JVB_AUTH_USER=jvb
+
+# --- OPCIONAL: Autenticación por JWT (Seguridad de producción) ---
+# Descomenta estas líneas si quieres que KognitoAI controle y autorice la creación de salas.
+# AUTH_TYPE=jwt
+# JWT_APP_ID=kognito_jitsi
+# JWT_APP_SECRET=tu_clave_secreta_jwt_compartida
+# JWT_ACCEPTED_ISSUERS=kognito
+# JWT_ACCEPTED_AUDIENCES=jitsi

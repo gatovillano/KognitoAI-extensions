@@ -45,6 +45,30 @@ import { UploadPhotosModal } from '@/components/UploadPhotosModal';
 import Lightbox from 'yet-another-react-lightbox';
 import 'yet-another-react-lightbox/styles.css';
 
+interface PhotoThumbnailProps {
+  photo: PhotoResponse;
+  apiBase: string;
+}
+
+const PhotoThumbnail: React.FC<PhotoThumbnailProps> = ({ photo, apiBase }) => {
+  const [failed, setFailed] = useState(false);
+  const src = (photo.thumbnail_path && !failed)
+    ? `${apiBase}/thumbnails/${photo.thumbnail_path}`
+    : `${apiBase}/media/${photo.file_path}`;
+
+  return (
+    <NextImage
+      src={src}
+      alt="Foto"
+      fill
+      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+      className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
 export const KogniPhotosGalleryView: React.FC = () => {
   const [albums, setAlbums] = useState<AlbumResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -441,14 +465,7 @@ export const KogniPhotosGalleryView: React.FC = () => {
                           isSelected ? 'ring-4 ring-primary border-primary' : 'border-border/40'
                         }`}
                       >
-                        <NextImage
-                          src={imageSrc}
-                          alt="Foto"
-                          fill
-                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
-                          className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
-                          loading="lazy"
-                        />
+                        <PhotoThumbnail photo={photo} apiBase={apiBase} />
                         
                         {/* Favorite Badge */}
                         {photo.is_favorite && (

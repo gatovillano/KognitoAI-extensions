@@ -78,6 +78,8 @@ export default function PublicSelectionRoute() {{
 """
 
 IMPORT_LINE = "from api.gallery_selection_panel.router import router as gallery_selection_extension_router"
+ROUTER_INCLUDE_LINE = "app.include_router(gallery_selection_extension_router)"
+
 
 ROUTER_MARKERS = [
     'app.include_router(galleries_router, prefix="/api/galleries", tags=["galleries"])',
@@ -217,8 +219,24 @@ def install():
             with open(API_MAIN_TARGET, "w", encoding="utf-8") as f:
                 f.write(content)
 
+        # --- Phase 0.5: Self-heal the original import if it was destroyed ---
+        # The previous buggy script accidentally removed `, MEDIA_ROOT, THUMBNAIL_ROOT`
+        # from the original `api.galleries` import. We must restore it if it's missing,
+        # otherwise KognitoAI will fail with NameError.
+        if "MEDIA_ROOT" not in content and "THUMBNAIL_ROOT" not in content:
+            lines = content.splitlines(keepends=True)
+            for i, line in enumerate(lines):
+                if line.startswith("from api.galleries import router as galleries_router"):
+                    # Restore the lost imports
+                    lines[i] = "from api.galleries import router as galleries_router, MEDIA_ROOT, THUMBNAIL_ROOT\n"
+                    print("  ✓ Auto-reparación: Importaciones de MEDIA_ROOT restauradas en api/main.py.")
+                    break
+            content = "".join(lines)
+            with open(API_MAIN_TARGET, "w", encoding="utf-8") as f:
+                f.write(content)
+
         # --- Phase 1: Fresh injection (only if not already correctly installed) ---
-        if "gallery_selection_extension_router" not in content:
+        if ROUTER_INCLUDE_LINE not in content:
             if not os.path.exists(API_MAIN_BACKUP):
                 shutil.copyfile(API_MAIN_TARGET, API_MAIN_BACKUP)
                 print("  ✓ Copia de seguridad creada para api/main.py.")
@@ -244,7 +262,7 @@ def install():
                 modified = "".join(lines)
 
             # Step B: Insert app.include_router call (only if not already present)
-            if "gallery_selection_extension_router" not in modified:
+            if ROUTER_INCLUDE_LINE not in modified:
                 router_injection = "app.include_router(gallery_selection_extension_router)\n"
                 replaced = False
                 lines = modified.splitlines(keepends=True)
@@ -259,13 +277,13 @@ def install():
                     print("    Agrega manualmente: app.include_router(gallery_selection_extension_router)")
 
             # Step C: Write only if both modifications are present (atomic write)
-            if IMPORT_LINE in modified and "gallery_selection_extension_router" in modified:
+            if IMPORT_LINE in modified and ROUTER_INCLUDE_LINE in modified:
                 with open(API_MAIN_TARGET, "w", encoding="utf-8") as f:
                     f.write(modified)
                 print("  ✓ Router backend registrado con éxito en api/main.py.")
             else:
                 print("  ⚠ No se pudo inyectar el router en api/main.py — revisa el archivo manualmente.")
-        elif IMPORT_LINE in content:
+        elif ROUTER_INCLUDE_LINE in content:
             print("  ✓ Router backend ya registrado correctamente en api/main.py.")
 
     # 4. Database Setup
@@ -335,7 +353,7 @@ def uninstall():
         with open(API_MAIN_TARGET, "r", encoding="utf-8") as f:
             content = f.read()
         if "gallery_selection_extension_router" in content:
-            router_call = "app.include_router(gallery_selection_extension_router)"
+            router_call = "gallery_selection_extension_router"
             # Remove the router call line
             lines = content.splitlines(keepends=True)
             lines = [l for l in lines if router_call not in l and IMPORT_LINE not in l]

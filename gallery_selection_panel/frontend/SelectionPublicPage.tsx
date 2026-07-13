@@ -36,6 +36,29 @@ interface PublicData {
   token: string;
 }
 
+interface PhotoThumbnailProps {
+  photo: PhotoResponse;
+}
+
+const PhotoThumbnail: React.FC<PhotoThumbnailProps> = ({ photo }) => {
+  const [failed, setFailed] = useState(false);
+  const src = (photo.thumbnail_path && !failed)
+    ? `/thumbnails/${photo.thumbnail_path}`
+    : `/media/${photo.file_path}`;
+
+  return (
+    <NextImage
+      src={src}
+      alt="Foto"
+      fill
+      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+      className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
 export const SelectionPublicPage: React.FC<{ token: string }> = ({ token }) => {
   const [data, setData] = useState<PublicData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -256,14 +279,7 @@ export const SelectionPublicPage: React.FC<{ token: string }> = ({ token }) => {
                     isSelected ? 'border-primary ring-4 ring-primary/20' : 'border-border/60 hover:border-primary/40'
                   }`}
                 >
-                  <NextImage
-                    src={imageSrc}
-                    alt="Foto"
-                    fill
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
-                    className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                    loading="lazy"
-                  />
+                  <PhotoThumbnail photo={photo} />
 
                   {/* Selection Overlay Checkmark */}
                   <div className={`absolute top-3 left-3 h-7 w-7 rounded-full flex items-center justify-center transition-all ${
