@@ -13,7 +13,7 @@ EXT_DIR = os.path.dirname(os.path.abspath(__file__))
 def _find_kognito_base() -> str:
     """Detect KognitoAI installation directory."""
     candidates = [
-        os.path.abspath(os.path.join(EXT_DIR, "../kognito-ai")), # Relative inside repo
+        os.path.abspath(os.path.join(EXT_DIR, "../../kognito-ai")), # Relative inside repo
         os.path.expanduser("~/KognitoAI"),                      # Standard install path
         os.path.abspath(os.path.join(EXT_DIR, "../..")),         # Parent fallback
     ]
