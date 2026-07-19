@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import NextImage from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,12 +46,10 @@ const PhotoThumbnail: React.FC<PhotoThumbnailProps> = ({ photo }) => {
     : `/media/${photo.file_path}`;
 
   return (
-    <NextImage
+    <img
       src={src}
       alt="Foto"
-      fill
-      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
-      className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+      className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.03]"
       loading="lazy"
       onError={() => setFailed(true)}
     />
@@ -265,7 +262,7 @@ export const SelectionPublicPage: React.FC<{ token: string }> = ({ token }) => {
             <span className="text-xs text-muted-foreground">Toca una foto para marcarla</span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-4">
             {data.album.photos.map((photo, index) => {
               const isSelected = selectedPhotos.has(photo.id);
               const photoComment = selectedPhotos.get(photo.id);
@@ -275,7 +272,7 @@ export const SelectionPublicPage: React.FC<{ token: string }> = ({ token }) => {
                 <div
                   key={photo.id}
                   onClick={() => toggleSelectPhoto(photo.id)}
-                  className={`relative aspect-square rounded-2xl overflow-hidden cursor-pointer border-2 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] group shadow-sm will-change-transform ${
+                  className={`relative break-inside-avoid mb-4 rounded-2xl overflow-hidden cursor-pointer border-2 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] group shadow-sm will-change-transform ${
                     isSelected ? 'border-primary ring-4 ring-primary/20' : 'border-border/60 hover:border-primary/40'
                   }`}
                 >

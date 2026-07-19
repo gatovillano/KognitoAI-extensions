@@ -27,6 +27,7 @@ import {
   Square,
   CheckCircle2,
   XCircle,
+  GripVertical,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -45,6 +46,25 @@ import { UploadPhotosModal } from '@/components/UploadPhotosModal';
 import Lightbox from 'yet-another-react-lightbox';
 import 'yet-another-react-lightbox/styles.css';
 
+// DnD Kit imports
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
 interface PhotoThumbnailProps {
   photo: PhotoResponse;
   apiBase: string;
@@ -57,15 +77,146 @@ const PhotoThumbnail: React.FC<PhotoThumbnailProps> = ({ photo, apiBase }) => {
     : `${apiBase}/media/${photo.file_path}`;
 
   return (
-    <NextImage
+    <img
       src={src}
       alt="Foto"
-      fill
-      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
-      className="object-cover transition-transform duration-300 group-hover:scale-[1.05]"
+      className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.05]"
       loading="lazy"
       onError={() => setFailed(true)}
     />
+  );
+};
+
+interface SortablePhotoItemProps {
+  photo: PhotoResponse;
+  index: number;
+  apiBase: string;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  isCover: boolean;
+  onSelect: () => void;
+  onOpenLightbox: () => void;
+  onToggleFavorite: () => void;
+  onSetCover: () => void;
+  onDelete: () => void;
+}
+
+const SortablePhotoItem: React.FC<SortablePhotoItemProps> = ({
+  photo,
+  index,
+  apiBase,
+  isSelectionMode,
+  isSelected,
+  isCover,
+  onSelect,
+  onOpenLightbox,
+  onToggleFavorite,
+  onSetCover,
+  onDelete,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: photo.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 50 : 'auto',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`relative break-inside-avoid mb-4 rounded-2xl overflow-hidden bg-muted cursor-pointer shadow-sm group border transition-all duration-300 ${
+        isSelected ? 'ring-4 ring-primary border-primary' : 'border-border/40'
+      }`}
+      onClick={(e) => {
+        if (isSelectionMode) {
+          onSelect();
+        } else {
+          onOpenLightbox();
+        }
+      }}
+    >
+      <PhotoThumbnail photo={photo} apiBase={apiBase} />
+
+      {/* Drag Handle - only visible when not in selection mode */}
+      {!isSelectionMode && (
+        <div
+          {...attributes}
+          {...listeners}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+          className="absolute top-2 left-2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-lg shadow-md z-20 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Arrastrar para reordenar"
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+      )}
+
+      {/* Favorite Badge */}
+      {photo.is_favorite && (
+        <div className="absolute top-2 right-2 bg-yellow-500 text-white p-1 rounded-full shadow-md z-10">
+          <Star className="h-3 w-3 fill-white" />
+        </div>
+      )}
+
+      {/* Cover Indicator */}
+      {isCover && (
+        <div className={`absolute top-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-md z-10 ${
+          !isSelectionMode ? 'left-10' : 'left-2'
+        }`}>
+          Portada
+        </div>
+      )}
+
+      {/* Selection Checkbox */}
+      {isSelectionMode && (
+        <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-20">
+          <div className={`h-7 w-7 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-primary border-primary text-white' : 'bg-black/50 border-white'}`}>
+            {isSelected && <CheckCircle2 className="h-5 w-5 text-white" />}
+          </div>
+        </div>
+      )}
+
+      {/* Action Menu (Normal mode) */}
+      {!isSelectionMode && (
+        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-white bg-black/60 hover:bg-black/80 rounded-full"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[180px]">
+              <DropdownMenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(); }}>
+                <Star className="mr-2 h-4 w-4 text-yellow-500" /> {photo.is_favorite ? 'Quitar Favorito' : 'Marcar Favorito'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSetCover(); }}>
+                <ImageIcon className="mr-2 h-4 w-4" /> Portada del Álbum
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
+                <Trash2 className="mr-2 h-4 w-4" /> Eliminar Foto
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -77,7 +228,68 @@ export const KogniPhotosGalleryView: React.FC = () => {
   // Selected album for detail view / share / submissions
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<AlbumResponse | null>(null);
+  const [photos, setPhotos] = useState<PhotoResponse[]>([]);
   const [subTab, setSubTab] = useState<'photos' | 'received_selections'>('photos');
+
+  // DnD Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Sync photos local state with selectedAlbum
+  useEffect(() => {
+    if (selectedAlbum) {
+      setPhotos(selectedAlbum.photos);
+    } else {
+      setPhotos([]);
+    }
+  }, [selectedAlbum]);
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    let oldIndex = -1;
+    let newIndex = -1;
+
+    setPhotos((prevPhotos) => {
+      oldIndex = prevPhotos.findIndex((p) => p.id === active.id);
+      newIndex = prevPhotos.findIndex((p) => p.id === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return prevPhotos;
+
+      const newPhotos = arrayMove(prevPhotos, oldIndex, newIndex);
+      return newPhotos.map((p, idx) => ({ ...p, order: idx }));
+    });
+
+    if (selectedAlbumId) {
+      const activeIdx = photos.findIndex((p) => p.id === active.id);
+      const overIdx = photos.findIndex((p) => p.id === over.id);
+      if (activeIdx !== -1 && overIdx !== -1) {
+        const movedPhotos = arrayMove(photos, activeIdx, overIdx);
+        const payload = movedPhotos.map((photo, index) => ({
+          photo_id: photo.id,
+          order: index
+        }));
+
+        try {
+          await apiClient.post(`${apiBase}/api/galleries/albums/${selectedAlbumId}/reorder-photos`, payload);
+          toast.success('Orden de fotos guardado.');
+          fetchAlbumDetail(selectedAlbumId);
+        } catch (error) {
+          toast.error('Error al guardar el orden de las fotos.');
+          console.error('Error reordering photos:', error);
+        }
+      }
+    }
+  };
 
   // Photo Selection & Batch Operations
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
@@ -191,10 +403,10 @@ export const KogniPhotosGalleryView: React.FC = () => {
   };
 
   const toggleSelectAll = () => {
-    if (selectedAlbum && selectedPhotos.size === selectedAlbum.photos.length) {
+    if (selectedAlbum && selectedPhotos.size === photos.length) {
       setSelectedPhotos(new Set());
     } else if (selectedAlbum) {
-      setSelectedPhotos(new Set(selectedAlbum.photos.map(p => p.id)));
+      setSelectedPhotos(new Set(photos.map(p => p.id)));
     }
   };
 
@@ -437,7 +649,7 @@ export const KogniPhotosGalleryView: React.FC = () => {
             </TabsList>
 
             <TabsContent value="photos">
-              {!selectedAlbum || selectedAlbum.photos.length === 0 ? (
+              {!selectedAlbum || photos.length === 0 ? (
                 <div className="text-center py-16 rounded-3xl border-2 border-dashed border-border p-8">
                   <ImageIcon className="mx-auto h-16 w-16 text-muted-foreground/40 mb-3" />
                   <h3 className="text-lg font-bold">Sin fotos en este álbum</h3>
@@ -446,82 +658,41 @@ export const KogniPhotosGalleryView: React.FC = () => {
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {selectedAlbum.photos.map((photo, index) => {
-                    const isSelected = selectedPhotos.has(photo.id);
-                    const imageSrc = photo.thumbnail_path ? `${apiBase}/thumbnails/${photo.thumbnail_path}` : `${apiBase}/media/${photo.file_path}`;
-                    return (
-                      <div
-                        key={photo.id}
-                        onClick={() => {
-                          if (isSelectionMode) {
-                            togglePhotoSelection(photo.id);
-                          } else {
-                            setLightboxIndex(index);
-                            setLightboxOpen(true);
-                          }
-                        }}
-                        className={`relative aspect-square rounded-2xl overflow-hidden bg-muted cursor-pointer shadow-sm group border transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] will-change-transform ${
-                          isSelected ? 'ring-4 ring-primary border-primary' : 'border-border/40'
-                        }`}
-                      >
-                        <PhotoThumbnail photo={photo} apiBase={apiBase} />
-                        
-                        {/* Favorite Badge */}
-                        {photo.is_favorite && (
-                          <div className="absolute top-2 right-2 bg-yellow-500 text-white p-1 rounded-full shadow-md z-10">
-                            <Star className="h-3 w-3 fill-white" />
-                          </div>
-                        )}
-
-                        {/* Cover Indicator */}
-                        {selectedAlbum.cover_photo_id === photo.id && (
-                          <div className="absolute top-2 left-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-md z-10">
-                            Portada
-                          </div>
-                        )}
-
-                        {/* Selection Checkbox */}
-                        {isSelectionMode && (
-                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-20">
-                            <div className={`h-7 w-7 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-primary border-primary text-white' : 'bg-black/50 border-white'}`}>
-                              {isSelected && <CheckCircle2 className="h-5 w-5 text-white" />}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Action Menu (Normal mode) */}
-                        {!isSelectionMode && (
-                          <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-white bg-black/60 hover:bg-black/80 rounded-full"
-                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-[180px]">
-                                <DropdownMenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleFavorite([photo.id]); }}>
-                                  <Star className="mr-2 h-4 w-4 text-yellow-500" /> {photo.is_favorite ? 'Quitar Favorito' : 'Marcar Favorito'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSetCover(photo.id); }}>
-                                  <ImageIcon className="mr-2 h-4 w-4" /> Portada del Álbum
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeletePhotos([photo.id]); }} className="text-destructive focus:text-destructive">
-                                  <Trash2 className="mr-2 h-4 w-4" /> Eliminar Foto
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={photos.map((p) => p.id)}
+                    strategy={rectSortingStrategy}
+                  >
+                    <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-4">
+                      {photos.map((photo, index) => {
+                        const isSelected = selectedPhotos.has(photo.id);
+                        return (
+                          <SortablePhotoItem
+                            key={photo.id}
+                            photo={photo}
+                            index={index}
+                            apiBase={apiBase}
+                            isSelectionMode={isSelectionMode}
+                            isSelected={isSelected}
+                            isCover={selectedAlbum.cover_photo_id === photo.id}
+                            onSelect={() => togglePhotoSelection(photo.id)}
+                            onOpenLightbox={() => {
+                              setLightboxIndex(index);
+                              setLightboxOpen(true);
+                            }}
+                            onToggleFavorite={() => handleToggleFavorite([photo.id])}
+                            onSetCover={() => handleSetCover(photo.id)}
+                            onDelete={() => handleDeletePhotos([photo.id])}
+                          />
+                        );
+                      })}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               )}
             </TabsContent>
 
