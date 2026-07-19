@@ -1,30 +1,120 @@
 #!/usr/bin/env bash
+
+# Fediverso - Extension Installer
+# Installs the extension into an existing KognitoAI installation.
+# Can be run locally or directly from GitHub via curl.
+
 set -e
 
-# Obtener directorio del script
-# Detectar ubicación del script o archivos locales
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-if [ -f "$SCRIPT_DIR/install.py" ]; then
-    INSTALLER_PATH="$SCRIPT_DIR/install.py"
-elif [ -f "./install.py" ]; then
-    INSTALLER_PATH="./install.py"
-elif [ -f "./fediverso/install.py" ]; then
-    INSTALLER_PATH="./fediverso/install.py"
+EXT_REPO_URL="https://github.com/gatovillano/KognitoAI-extensions.git"
+KOGNITO_CONFIG="${HOME}/.kognito/config/.env"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
+
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BOLD}🧩 Instalador de Extensión: Fediverso${NC}"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+# 1. Detect target KognitoAI directory (prioritizing the home directory installation)
+DEFAULT_REPO_DIR="${HOME}/KognitoAI"
+if [ ! -d "${DEFAULT_REPO_DIR}" ] && [ -f "${KOGNITO_CONFIG}" ]; then
+    CONFIG_REPO_DIR=$(grep -E '^KOGNITO_REPO_DIR=' "${KOGNITO_CONFIG}" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+    DEFAULT_REPO_DIR="${CONFIG_REPO_DIR:-${DEFAULT_REPO_DIR}}"
+fi
+
+echo -e "  Instalación de Kognito AI detectada: ${BOLD}${DEFAULT_REPO_DIR}${NC}"
+printf "  ¿Instalar en esta ruta? [S/n]: "
+read -r CONFIRM_PATH
+
+if [[ "${CONFIRM_PATH}" =~ ^[nN]$ ]]; then
+    printf "  Por favor ingresa la ruta de destino: "
+    read -r KOGNITO_DIR
 else
-    echo "⚠ No se encontró install.py localmente. Por favor, asegúrate de estar dentro del repositorio clonado."
+    KOGNITO_DIR="${DEFAULT_REPO_DIR}"
+fi
+
+# Expand tilde ~ if user entered it
+KOGNITO_DIR="${KOGNITO_DIR/#\~/$HOME}"
+
+if [ ! -d "${KOGNITO_DIR}" ] || [ ! -f "${KOGNITO_DIR}/run_api.py" ]; then
+    echo -e "${RED}❌ Error: No se encontró la instalación de Kognito AI en: ${BOLD}${KOGNITO_DIR}${NC}"
     exit 1
 fi
 
-echo "Iniciando instalación de la extensión del Fediverso..."
+# 2. Ensure target extensions directory exists inside KognitoAI
+TARGET_EXTENSIONS_DIR="${KOGNITO_DIR}/extensions"
+TARGET_FEDIVERSO_DIR="${TARGET_EXTENSIONS_DIR}/fediverso"
+mkdir -p "${TARGET_EXTENSIONS_DIR}"
 
-# Usar el venv de KognitoAI si existe para evitar problemas de dependencias en python
-VENV_PATH="/home/gato/KognitoAI/venv_host"
-if [ -d "$VENV_PATH" ]; then
-    echo "🐍 Ejecutando instalador con el entorno virtual de KognitoAI..."
-    "$VENV_PATH/bin/python" "$INSTALLER_PATH" "$@"
+# 3. Download/clone from GitHub or copy local files
+if [ -n "${SCRIPT_DIR}" ] && [ -f "${SCRIPT_DIR}/install.py" ]; then
+    # Running inside the already-cloned extensions repo
+    echo -e "${BLUE}📦 Copiando extensión local a la carpeta de extensiones de KognitoAI...${NC}"
+    rm -rf "${TARGET_FEDIVERSO_DIR}"
+    cp -r "${SCRIPT_DIR}" "${TARGET_FEDIVERSO_DIR}"
 else
-    python3 "$INSTALLER_PATH" "$@"
+    # Clone/update extensions repo from github
+    echo -e "${YELLOW}🌐 Descargando la extensión desde GitHub...${NC}"
+    TMP_DIR=$(mktemp -d -t kognito_ext_XXXXXX)
+    if git clone --depth 1 "${EXT_REPO_URL}" "${TMP_DIR}"; then
+        rm -rf "${TARGET_FEDIVERSO_DIR}"
+        cp -r "${TMP_DIR}/fediverso" "${TARGET_FEDIVERSO_DIR}"
+        rm -rf "${TMP_DIR}"
+    else
+        echo -e "${RED}❌ Error al clonar el repositorio desde GitHub.${NC}"
+        rm -rf "${TMP_DIR}"
+        exit 1
+    fi
 fi
 
-echo "¡Listo! La instalación de Fediverso ha concluido."
+PYTHON="${KOGNITO_DIR}/venv_host/bin/python"
+if [ ! -f "${PYTHON}" ]; then
+    echo -e "${RED}❌ No se encontró el entorno virtual en ${KOGNITO_DIR}/venv_host.${NC}"
+    exit 1
+fi
+
+# 4. Prompt Option Menu (or auto-select via argument)
+OPTION=""
+if [ "$1" == "--uninstall" ]; then
+    OPTION="2"
+fi
+
+if [ -z "${OPTION}" ]; then
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${GREEN}1)${NC} 🌐 Instalar Fediverso Extension"
+    echo -e "  ${RED}2)${NC} 🗑️  Desinstalar (restaurar estado original)"
+    echo -e "  ${YELLOW}3)${NC} ❌ Salir"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    printf "  Selecciona una opción [1-3]: "
+    read -r OPTION
+fi
+
+case "${OPTION}" in
+    1)
+        echo -e "\n${GREEN}🚀 Instalando extensión Fediverso...${NC}"
+        (cd "${KOGNITO_DIR}" && PYTHONPATH=. "${PYTHON}" "${TARGET_FEDIVERSO_DIR}/install.py")
+        ;;
+    2)
+        echo -e "\n${YELLOW}🔄 Desinstalando extensión Fediverso...${NC}"
+        (cd "${KOGNITO_DIR}" && PYTHONPATH=. "${PYTHON}" "${TARGET_FEDIVERSO_DIR}/install.py" --uninstall)
+        echo -e "${YELLOW}🗑️  Eliminando archivos de la extensión...${NC}"
+        rm -rf "${TARGET_FEDIVERSO_DIR}"
+        echo -e "${GREEN}✅ Extensión desinstalada con éxito.${NC}"
+        ;;
+    3)
+        echo "Saliendo."
+        exit 0
+        ;;
+    *)
+        echo -e "${YELLOW}Opción no reconocida. Ejecutando instalación...${NC}"
+        (cd "${KOGNITO_DIR}" && PYTHONPATH=. "${PYTHON}" "${TARGET_FEDIVERSO_DIR}/install.py")
+        ;;
+esac
+

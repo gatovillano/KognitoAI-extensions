@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Folder, Mail, RefreshCw, Settings, Sparkles, Send, FileText, ChevronRight } from 'lucide-react';
+import { Folder, Mail, RefreshCw, Settings, Sparkles, Send, FileText, ChevronRight, ChevronLeft } from 'lucide-react';
 import { EmailSettingsModal } from './EmailSettingsModal';
 import { EmailComposeModal } from './EmailComposeModal';
 import { SafeHtmlViewer } from './SafeHtmlViewer';
@@ -23,6 +23,7 @@ export function EmailInboxView() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [isReplyMode, setIsReplyMode] = useState(false);
+  const [activeView, setActiveView] = useState<'folders' | 'list' | 'viewer'>('folders');
 
   useEffect(() => {
     // Fetch folders
@@ -61,6 +62,7 @@ export function EmailInboxView() {
     setSelectedMsg(msg);
     setMsgDetail(null);
     setAiSummary('');
+    setActiveView('viewer');
     try {
       const res = await apiClient.get(`/api/email/messages/${msg.uid}?folder=${encodeURIComponent(activeFolder)}`);
       setMsgDetail(res.data);
@@ -99,9 +101,9 @@ export function EmailInboxView() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] w-full gap-4 overflow-hidden pr-4">
+    <div className="flex h-[calc(100vh-6rem)] w-full gap-4 overflow-hidden px-4 lg:pl-0 lg:pr-4">
       {/* Panel 1: Folders */}
-      <div className="w-56 bg-card/30 backdrop-blur-xl border border-border/40 p-4 rounded-3xl flex flex-col gap-3 shrink-0">
+      <div className={`${activeView === 'folders' ? 'flex' : 'hidden'} lg:flex w-full lg:w-56 bg-card/30 backdrop-blur-xl border border-border/40 p-4 rounded-3xl flex-col gap-3 shrink-0`}>
         <Button onClick={() => { setIsReplyMode(false); setIsComposeOpen(true); }} className="w-full rounded-full bg-primary hover:bg-primary/95 text-white gap-2 h-10 shadow-lg">
           <Send className="h-4 w-4" />
           Redactar
@@ -113,7 +115,7 @@ export function EmailInboxView() {
               <Button
                 key={f}
                 variant={activeFolder === f ? 'secondary' : 'ghost'}
-                onClick={() => setActiveFolder(f)}
+                onClick={() => { setActiveFolder(f); setActiveView('list'); }}
                 className="w-full justify-start rounded-xl gap-2 font-normal text-sm"
               >
                 <Folder className="h-4 w-4 text-muted-foreground" />
@@ -129,9 +131,19 @@ export function EmailInboxView() {
       </div>
 
       {/* Panel 2: Message List */}
-      <div className="w-80 bg-card/30 backdrop-blur-xl border border-border/40 rounded-3xl flex flex-col overflow-hidden shrink-0">
+      <div className={`${activeView === 'list' ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 bg-card/30 backdrop-blur-xl border border-border/40 rounded-3xl flex-col overflow-hidden shrink-0`}>
         <div className="p-4 border-b border-border/40 flex justify-between items-center bg-card/10">
-          <h2 className="font-bold text-sm tracking-tight">{activeFolder}</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setActiveView('folders')}
+              className="lg:hidden h-8 w-8 rounded-full shrink-0"
+            >
+              <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+            </Button>
+            <h2 className="font-bold text-sm tracking-tight truncate">{activeFolder}</h2>
+          </div>
           <Button size="icon" variant="ghost" onClick={() => loadMails(activeFolder)} className="h-8 w-8 rounded-full">
             <RefreshCw className="h-4 w-4 text-muted-foreground" />
           </Button>
@@ -163,25 +175,35 @@ export function EmailInboxView() {
       </div>
 
       {/* Panel 3: Viewer */}
-      <div className="flex-1 bg-card/30 backdrop-blur-xl border border-border/40 rounded-3xl flex flex-col overflow-hidden">
+      <div className={`${activeView === 'viewer' ? 'flex' : 'hidden'} lg:flex flex-1 w-full bg-card/30 backdrop-blur-xl border border-border/40 rounded-3xl flex-col overflow-hidden`}>
         {selectedMsg ? (
           msgDetail ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Header */}
               <div className="p-4 border-b border-border/40 flex justify-between items-start bg-card/10 gap-4 shrink-0">
-                <div className="min-w-0">
-                  <h1 className="font-bold text-base text-foreground tracking-tight line-clamp-1">{msgDetail.subject}</h1>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">De: {msgDetail.from}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">Para: {msgDetail.to}</p>
+                <div className="min-w-0 flex-1 flex gap-2 items-start">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setActiveView('list')}
+                    className="lg:hidden h-8 w-8 rounded-full shrink-0"
+                  >
+                    <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  <div className="min-w-0 flex-1">
+                    <h1 className="font-bold text-base text-foreground tracking-tight line-clamp-1">{msgDetail.subject}</h1>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">De: {msgDetail.from}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">Para: {msgDetail.to}</p>
+                  </div>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <Button size="sm" onClick={handleSummarize} disabled={isSummarizing} className="rounded-full bg-primary/10 hover:bg-primary/20 text-primary gap-1 border border-primary/20">
                     <Sparkles className="h-4 w-4" />
-                    {isSummarizing ? 'Resumiendo...' : 'Resumir'}
+                    <span className="hidden sm:inline">{isSummarizing ? 'Resumiendo...' : 'Resumir'}</span>
                   </Button>
                   <Button size="sm" onClick={handleSaveToNotes} className="rounded-full bg-secondary/10 hover:bg-secondary/20 text-secondary gap-1 border border-secondary/20">
                     <FileText className="h-4 w-4" />
-                    Cerebro
+                    <span className="hidden sm:inline">Cerebro</span>
                   </Button>
                   <Button size="sm" onClick={() => { setIsReplyMode(true); setIsComposeOpen(true); }} className="rounded-full bg-primary hover:bg-primary/95 text-white">
                     Responder
@@ -209,7 +231,15 @@ export function EmailInboxView() {
             <div className="flex-1 flex justify-center items-center text-sm text-muted-foreground">Abriendo mensaje...</div>
           )
         ) : (
-          <div className="flex-1 flex flex-col justify-center items-center text-sm text-muted-foreground gap-3">
+          <div className="flex-1 flex flex-col justify-center items-center text-sm text-muted-foreground gap-3 relative">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setActiveView('list')}
+              className="lg:hidden absolute top-4 left-4 h-8 w-8 rounded-full"
+            >
+              <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+            </Button>
             <Mail className="h-10 w-10 text-muted-foreground/50 animate-bounce" />
             Selecciona un correo para comenzar a leer
           </div>

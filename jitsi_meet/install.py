@@ -208,7 +208,8 @@ def _install_backend():
         src = os.path.join(EXT_DIR, "backend", filename)
         dst = os.path.join(EXT_BACKEND_DIR, filename)
         if os.path.exists(src):
-            shutil.copy2(src, dst)
+            if os.path.abspath(src) != os.path.abspath(dst):
+                shutil.copy2(src, dst)
     print(f"  ✓ Backend de extensión copiado a: {EXT_BACKEND_DIR}")
 
 

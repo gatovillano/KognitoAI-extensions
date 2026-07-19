@@ -75,14 +75,20 @@ def _copy_files():
         src = os.path.join(SRC_BACKEND_DIR, filename)
         dst = os.path.join(EXT_BACKEND_DIR, filename)
         if os.path.exists(src):
-            shutil.copy2(src, dst)
-            print(f"    ✓ Copiado backend: {filename} -> {dst}")
+            if os.path.abspath(src) != os.path.abspath(dst):
+                shutil.copy2(src, dst)
+                print(f"    ✓ Copiado backend: {filename} -> {dst}")
+            else:
+                print(f"    ✓ Backend ya ubicado en: {dst}")
             
     # 2. Copiar frontend
     os.makedirs(COMPONENTS_DIR, exist_ok=True)
     if os.path.exists(SRC_FRONTEND_PANEL):
-        shutil.copy2(SRC_FRONTEND_PANEL, FEDIVERO_PANEL_TARGET)
-        print(f"    ✓ Copiado frontend component: FediversePanel.tsx -> {FEDIVERO_PANEL_TARGET}")
+        if os.path.abspath(SRC_FRONTEND_PANEL) != os.path.abspath(FEDIVERO_PANEL_TARGET):
+            shutil.copy2(SRC_FRONTEND_PANEL, FEDIVERO_PANEL_TARGET)
+            print(f"    ✓ Copiado frontend component: FediversePanel.tsx -> {FEDIVERO_PANEL_TARGET}")
+        else:
+            print(f"    ✓ Frontend component ya ubicado en: {FEDIVERO_PANEL_TARGET}")
 
 def install():
     print("🚀 Instalando extensión del Fediverso para KognitoAI...")
