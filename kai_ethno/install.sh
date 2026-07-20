@@ -6,11 +6,6 @@
 
 set -e
 
-# Re-attach stdin to terminal if piped via curl | bash
-if [ ! -t 0 ] && [ -c /dev/tty ]; then
-    exec < /dev/tty
-fi
-
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
@@ -41,25 +36,8 @@ if [ ! -d "${DEFAULT_REPO_DIR}" ] && [ -f "${PWD}/run_api.py" ]; then
     DEFAULT_REPO_DIR="${PWD}"
 fi
 
-echo -e "  Instalación de Kognito AI detectada: ${BOLD}${DEFAULT_REPO_DIR}${NC}"
-CONFIRM_PATH="s"
-if [ -t 0 ]; then
-    printf "  ¿Instalar en esta ruta? [S/n]: "
-    read -r CONFIRM_INPUT
-    if [ -n "${CONFIRM_INPUT}" ]; then
-        CONFIRM_PATH="${CONFIRM_INPUT}"
-    fi
-fi
-
-if [[ "${CONFIRM_PATH}" =~ ^[nN]$ ]]; then
-    printf "  Por favor ingresa la ruta de destino: "
-    read -r KOGNITO_DIR
-else
-    KOGNITO_DIR="${DEFAULT_REPO_DIR}"
-fi
-
-# Expand tilde ~ if user entered it
-KOGNITO_DIR="${KOGNITO_DIR/#\~/$HOME}"
+KOGNITO_DIR="${DEFAULT_REPO_DIR}"
+echo -e "  Ruta de Kognito AI: ${BOLD}${KOGNITO_DIR}${NC}"
 
 if [ ! -d "${KOGNITO_DIR}" ] || [ ! -f "${KOGNITO_DIR}/run_api.py" ]; then
     echo -e "${RED}❌ Error: No se encontró la instalación de Kognito AI en: ${BOLD}${KOGNITO_DIR}${NC}"
@@ -73,13 +51,11 @@ mkdir -p "${TARGET_EXTENSIONS_DIR}"
 
 # 3. Download/clone from GitHub or copy local files
 if [ -n "${SCRIPT_DIR}" ] && [ -f "${SCRIPT_DIR}/install.py" ]; then
-    # Running inside the already-cloned extensions repo
     echo -e "${BLUE}📦 Copiando extensión local a la carpeta de extensiones de KognitoAI...${NC}"
     rm -rf "${TARGET_ETHNO_DIR}"
     cp -r "${SCRIPT_DIR}" "${TARGET_ETHNO_DIR}"
 else
-    # Clone/update extensions repo from github
-    echo -e "${YELLOW}🌐 Descargando la extensión desde GitHub...${NC}"
+    echo -e "${YELLOW}🌐 Descargando extensión desde GitHub...${NC}"
     TMP_DIR=$(mktemp -d -t kognito_ext_XXXXXX)
     if git clone --depth 1 "${EXT_REPO_URL}" "${TMP_DIR}"; then
         rm -rf "${TARGET_ETHNO_DIR}"
@@ -97,41 +73,6 @@ if [ ! -f "${PYTHON}" ]; then
     PYTHON=$(command -v python3 || command -v python)
 fi
 
-# 4. Prompt Option Menu (or auto-select via argument)
-OPTION=""
-if [ "$1" == "--uninstall" ]; then
-    OPTION="2"
-fi
-
-if [ -z "${OPTION}" ] && [ -t 0 ]; then
-    echo ""
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "  ${GREEN}1)${NC} 📜 Instalar KAI-Ethno Extension"
-    echo -e "  ${RED}2)${NC} 🗑️  Desinstalar (restaurar estado original)"
-    echo -e "  ${YELLOW}3)${NC} ❌ Salir"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    printf "  Selecciona una opción [1-3]: "
-    read -r OPTION
-fi
-
-case "${OPTION}" in
-    1|"")
-        echo -e "\n${GREEN}🚀 Instalando extensión KAI-Ethno...${NC}"
-        (cd "${KOGNITO_DIR}" && PYTHONPATH=. "${PYTHON}" "${TARGET_ETHNO_DIR}/install.py")
-        ;;
-    2)
-        echo -e "\n${YELLOW}🔄 Desinstalando extensión KAI-Ethno...${NC}"
-        (cd "${KOGNITO_DIR}" && PYTHONPATH=. "${PYTHON}" "${TARGET_ETHNO_DIR}/install.py" --uninstall)
-        echo -e "${YELLOW}🗑️  Eliminando archivos de la extensión...${NC}"
-        rm -rf "${TARGET_ETHNO_DIR}"
-        echo -e "${GREEN}✅ Extensión desinstalada con éxito.${NC}"
-        ;;
-    3)
-        echo "Saliendo."
-        exit 0
-        ;;
-    *)
-        echo -e "${YELLOW}Opción no reconocida. Ejecutando instalación...${NC}"
-        (cd "${KOGNITO_DIR}" && PYTHONPATH=. "${PYTHON}" "${TARGET_ETHNO_DIR}/install.py")
-        ;;
-esac
+# 4. Execute Installation
+echo -e "\n${GREEN}🚀 Instalando extensión KAI-Ethno...${NC}"
+(cd "${KOGNITO_DIR}" && PYTHONPATH=. "${PYTHON}" "${TARGET_ETHNO_DIR}/install.py")
