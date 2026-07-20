@@ -201,9 +201,23 @@ class ArchivistAgent:
         
         return workflow.compile()
     
-    async def run(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def run(self, documents: Any = None, **kwargs: Any) -> Dict[str, Any]:
         """Ejecuta el agente con documentos para gestionar"""
-        self.state.documents = documents
+        if isinstance(documents, dict):
+            doc_list = documents.get("documents") or documents.get("sources") or [documents]
+        elif isinstance(documents, list):
+            doc_list = []
+            for item in documents:
+                if isinstance(item, dict):
+                    doc_list.append(item)
+                elif isinstance(item, list):
+                    doc_list.extend([i for i in item if isinstance(i, dict)])
+        elif documents is not None:
+            doc_list = [documents]
+        else:
+            doc_list = []
+
+        self.state.documents = doc_list
         self.state.status = "running"
         
         try:

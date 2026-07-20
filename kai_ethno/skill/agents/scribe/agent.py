@@ -190,27 +190,30 @@ class ScribeAgent:
         
         return workflow.compile()
     
-    async def run(self, research_question: str,
-                  sources: List[Dict[str, Any]],
-                  analysis_results: Dict[str, Any],
+    async def run(self, research_question: str = "",
+                  sources: Any = None,
+                  analysis_results: Any = None,
                   document_type: str = "ethnographic_report",
-                  citation_style: str = "apa") -> Dict[str, Any]:
+                  citation_style: str = "apa",
+                  patterns: Any = None,
+                  **kwargs: Any) -> Dict[str, Any]:
         """
         Ejecuta el agente para redactar documento académico
-
-        Args:
-            research_question: Pregunta de investigación
-            sources: Fuentes bibliográficas
-            analysis_results: Resultados de análisis de otros agentes
-            document_type: Tipo de documento (ethnographic_report, literature_review, etc.)
-            citation_style: Estilo de citación (apa, chicago, mla, aaa)
-
-        Returns:
-            Dict con documento final y metadata
         """
+        if isinstance(sources, dict):
+            src_list = sources.get("documents") or sources.get("sources") or [sources]
+        elif isinstance(sources, list):
+            src_list = sources
+        elif sources is not None:
+            src_list = [sources]
+        else:
+            src_list = []
+
+        res_dict = analysis_results if isinstance(analysis_results, dict) else {}
+
         self.state.research_question = research_question
-        self.state.sources = sources
-        self.state.analysis_results = {**analysis_results, "document_type": document_type, "citation_style": citation_style}
+        self.state.sources = src_list
+        self.state.analysis_results = {**res_dict, "document_type": document_type, "citation_style": citation_style}
         self.state.status = "running"
 
         try:

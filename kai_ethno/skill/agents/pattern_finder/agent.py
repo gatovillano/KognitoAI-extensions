@@ -204,9 +204,24 @@ class PatternFinderAgent:
         
         return workflow.compile()
     
-    async def run(self, corpus: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def run(self, corpus: Any = None, **kwargs: Any) -> Dict[str, Any]:
         """Ejecuta el agente con un corpus de documentos"""
-        self.state.corpus = corpus
+        if isinstance(corpus, dict):
+            raw_list = (
+                corpus.get("processed_materials")
+                or corpus.get("documents")
+                or corpus.get("sources")
+                or corpus.get("materials")
+                or [corpus]
+            )
+        elif isinstance(corpus, list):
+            raw_list = corpus
+        elif corpus is not None:
+            raw_list = [corpus]
+        else:
+            raw_list = []
+
+        self.state.corpus = raw_list
         self.state.status = "running"
         
         try:
@@ -223,3 +238,9 @@ class PatternFinderAgent:
             self.state.status = "error"
             logger.error(f"Error en PatternFinder: {e}")
             return {"status": "error", "error": str(e)}
+
+    async def analyze(self, corpus: Any = None, **kwargs: Any) -> Dict[str, Any]:
+        """
+        Alias de run para compatibilidad con orchestrator y herramientas.
+        """
+        return await self.run(corpus=corpus, **kwargs)

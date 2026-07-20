@@ -15,6 +15,22 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
+class BibliomancerSearchResult(list):
+    """
+    Subclase de list que también soporta .get() para ser compatible tanto con
+    código que espera List[Dict] (como search_ethnographic_literature.py)
+    como código que espera un Dict con 'sources' o 'documents' (como orchestrator.py).
+    """
+    def __init__(self, items: list = None, raw_dict: dict = None):
+        super().__init__(items or [])
+        self.raw_dict = raw_dict or {}
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key in ("sources", "documents", "collected_docs", "validated_docs"):
+            return list(self)
+        return self.raw_dict.get(key, default)
+
+
 class BibliomancerState(BaseModel):
     """Estado del agente Bibliomancer"""
     query: str = ""
@@ -55,94 +71,98 @@ class BibliomancerAgent:
         if self.session and not self.session.closed:
             await self.session.close()
     
+    def _interpret_query(self, state: BibliomancerState) -> Dict[str, Any]:
+        """Interpreta la consulta de búsqueda y extrae términos clave"""
+        query = state.query.strip()
+        if not query:
+            return {"status": "error", "error": "Query vacía"}
+        # Tokenización simple: dividir por espacios y filtrar stopwords básicas
+        stopwords = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "el", "la", "los", "las", "un", "una", "de", "del", "y", "o", "en", "para", "por", "con"}
+        terms = [t.lower().strip('.,;:!?()[]{}') for t in query.split() if t.lower() not in stopwords and len(t) > 2]
+        state.filters.setdefault("terms", terms)
+        return {"status": "query_interpreted", "terms": terms}
+
+    def _search_databases_node(self, state: BibliomancerState) -> Dict[str, Any]:
+        """Busca en las bases de datos configuradas"""
+        return {"status": "searched", "collected_docs": state.collected_docs}
+
+    def _validate_sources(self, state: BibliomancerState) -> Dict[str, Any]:
+        """Valida la calidad de las fuentes encontradas"""
+        validated = []
+        for doc in state.collected_docs:
+            score = 0.0
+            checks = []
+            
+            # 1. Tiene título y abstract
+            if doc.get("title") and doc.get("abstract"):
+                score += 0.3
+                checks.append("complete_metadata")
+            
+            # 2. Tiene DOI o URL estable
+            if doc.get("doi") or doc.get("url"):
+                score += 0.2
+                checks.append("persistent_identifier")
+            
+            # 3. Año dentro de rango (si hay filtro)
+            year = doc.get("year")
+            if year and state.filters.get("year_from") and state.filters.get("year_to"):
+                if state.filters["year_from"] <= int(year) <= state.filters["year_to"]:
+                    score += 0.2
+                    checks.append("date_range")
+            elif year and int(year) >= 2015:
+                score += 0.2
+                checks.append("recent")
+            
+            # 4. Tipo de documento válido
+            doc_type = doc.get("type", "").lower()
+            valid_types = {"article", "journal article", "conference paper", "preprint", "book", "book chapter"}
+            if doc_type in valid_types or not doc_type:
+                score += 0.15
+                checks.append("valid_type")
+            
+            # 5. Tiene autores
+            if doc.get("authors"):
+                score += 0.15
+                checks.append("authored")
+            
+            doc["quality_score"] = score
+            doc["validation_checks"] = checks
+            
+            if score >= 0.5:
+                validated.append(doc)
+        
+        # Ordenar por score descendente
+        validated.sort(key=lambda x: x.get("quality_score", 0), reverse=True)
+        return {"status": "validated", "validated_docs": validated}
+
+    def _export_results(self, state: BibliomancerState) -> Dict[str, Any]:
+        """Exporta resultados en formato académico"""
+        docs = state.validated_docs
+        bibtex = self._export_bibtex(docs)
+        csv_rows = self._export_csv(docs)
+        return {
+            "status": "completed",
+            "bibtex": bibtex,
+            "csv": csv_rows,
+            "count": len(docs)
+        }
+
     def _build_graph(self) -> StateGraph:
         """Construye el grafo de LangGraph para el flujo del agente"""
-        
-        def interpret_query(state: BibliomancerState) -> Dict[str, Any]:
-            """Interpreta la consulta de búsqueda y extrae términos clave"""
-            query = state.query.strip()
-            if not query:
-                return {"status": "error", "error": "Query vacía"}
-            # Tokenización simple: dividir por espacios y filtrar stopwords básicas
-            stopwords = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "el", "la", "los", "las", "un", "una", "de", "del", "y", "o", "en", "para", "por", "con"}
-            terms = [t.lower().strip('.,;:!?()[]{}') for t in query.split() if t.lower() not in stopwords and len(t) > 2]
-            state.filters.setdefault("terms", terms)
-            return {"status": "query_interpreted", "terms": terms}
-        
-        def search_databases(state: BibliomancerState) -> Dict[str, Any]:
-            """Busca en las bases de datos configuradas"""
-            # Esta función es sync en el grafo, pero delega a métodos async
-            # LangGraph soporta sync nodes; usamos run_sync o precomputamos
-            return {"status": "searched", "collected_docs": state.collected_docs}
-        
-        def validate_sources(state: BibliomancerState) -> Dict[str, Any]:
-            """Valida la calidad de las fuentes encontradas"""
-            validated = []
-            for doc in state.collected_docs:
-                score = 0.0
-                checks = []
-                
-                # 1. Tiene título y abstract
-                if doc.get("title") and doc.get("abstract"):
-                    score += 0.3
-                    checks.append("complete_metadata")
-                
-                # 2. Tiene DOI o URL estable
-                if doc.get("doi") or doc.get("url"):
-                    score += 0.2
-                    checks.append("persistent_identifier")
-                
-                # 3. Año dentro de rango (si hay filtro)
-                year = doc.get("year")
-                if year and state.filters.get("year_from") and state.filters.get("year_to"):
-                    if state.filters["year_from"] <= int(year) <= state.filters["year_to"]:
-                        score += 0.2
-                        checks.append("date_range")
-                elif year and int(year) >= 2015:
-                    score += 0.2
-                    checks.append("recent")
-                
-                # 4. Tipo de documento válido
-                doc_type = doc.get("type", "").lower()
-                valid_types = {"article", "journal article", "conference paper", "preprint", "book", "book chapter"}
-                if doc_type in valid_types or not doc_type:
-                    score += 0.15
-                    checks.append("valid_type")
-                
-                # 5. Tiene autores
-                if doc.get("authors"):
-                    score += 0.15
-                    checks.append("authored")
-                
-                doc["quality_score"] = score
-                doc["validation_checks"] = checks
-                
-                if score >= 0.5:
-                    validated.append(doc)
-            
-            # Ordenar por score descendente
-            validated.sort(key=lambda x: x.get("quality_score", 0), reverse=True)
-            return {"status": "validated", "validated_docs": validated}
-        
-        def export_results(state: BibliomancerState) -> Dict[str, Any]:
-            """Exporta resultados en formato académico"""
-            docs = state.validated_docs
-            bibtex = self._export_bibtex(docs)
-            csv_rows = self._export_csv(docs)
-            return {
-                "status": "completed",
-                "bibtex": bibtex,
-                "csv": csv_rows,
-                "count": len(docs)
-            }
-        
-        # Construir grafo
         workflow = StateGraph(BibliomancerState)
         
-        workflow.add_node("interpret", interpret_query)
-        workflow.add_node("search", search_databases)
-        workflow.add_node("validate", validate_sources)
-        workflow.add_node("export", export_results)
+        workflow.add_node("interpret", self._interpret_query)
+        workflow.add_node("search", self._search_databases_node)
+        workflow.add_node("validate", self._validate_sources)
+        workflow.add_node("export", self._export_results)
+        
+        workflow.set_entry_point("interpret")
+        workflow.add_edge("interpret", "search")
+        workflow.add_edge("search", "validate")
+        workflow.add_edge("validate", "export")
+        workflow.add_edge("export", END)
+        
+        return workflow.compile()
         
         workflow.set_entry_point("interpret")
         workflow.add_edge("interpret", "search")
@@ -174,7 +194,7 @@ class BibliomancerAgent:
         
         try:
             # Fase 1: Interpretar query (sync node)
-            interp_result = interpret_query(self.state)
+            interp_result = self._interpret_query(self.state)
             if interp_result.get("status") == "error":
                 return {"status": "error", "error": interp_result["error"], "documents": []}
             
@@ -206,15 +226,21 @@ class BibliomancerAgent:
                     self.state.collected_docs.extend(res)
             
             # Fase 3: Validar fuentes (usamos el estado actualizado)
-            val_result = validate_sources(self.state)
+            val_result = self._validate_sources(self.state)
             self.state.validated_docs = val_result["validated_docs"]
             
+            # Asegurar campo source_api en cada documento
+            for doc in self.state.validated_docs:
+                if "source_api" not in doc:
+                    doc["source_api"] = doc.get("source", "API")
+            
             # Fase 4: Exportar
-            exp_result = export_results(self.state)
+            exp_result = self._export_results(self.state)
             
             return {
                 "status": "success",
                 "documents": self.state.validated_docs,
+                "sources": self.state.validated_docs,
                 "count": len(self.state.validated_docs),
                 "total_collected": len(self.state.collected_docs),
                 "databases_used": self.state.databases,
@@ -227,7 +253,30 @@ class BibliomancerAgent:
             self.state.error = str(e)
             self.state.status = "error"
             logger.error(f"Error en Bibliomancer: {e}")
-            return {"status": "error", "error": str(e), "documents": []}
+            return {"status": "error", "error": str(e), "documents": [], "sources": []}
+
+    async def search(
+        self,
+        query: str,
+        max_results: int = 15,
+        year_range: Optional[tuple] = None,
+        databases: Optional[List[str]] = None
+    ) -> BibliomancerSearchResult:
+        """
+        Método de búsqueda de literatura para bibliomancer.
+        Retorna una lista enriquecida (BibliomancerSearchResult) compatible tanto
+        con listas como con diccionarios que llaman a .get("sources").
+        """
+        filters: Dict[str, Any] = {}
+        if max_results:
+            filters["max_results"] = max_results
+        if year_range and isinstance(year_range, (list, tuple)) and len(year_range) >= 2:
+            filters["year_from"] = year_range[0]
+            filters["year_to"] = year_range[1]
+
+        res = await self.run(query=query, databases=databases, filters=filters)
+        docs = res.get("documents", [])
+        return BibliomancerSearchResult(docs, raw_dict=res)
     
     async def _search_semantic_scholar(self, session: aiohttp.ClientSession, query: str, filters: Dict) -> List[Dict]:
         """Búsqueda en Semantic Scholar API (pública, sin key)"""

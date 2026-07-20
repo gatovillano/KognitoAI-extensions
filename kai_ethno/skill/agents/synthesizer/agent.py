@@ -41,191 +41,198 @@ class SynthesizerAgent:
     
     def __init__(self, llm_service: Any = None):
         self.llm = llm_service
-        self.graph = self._build_graph()
         self.state = SynthesizerState()
+        self.graph = self._build_graph()
+
+    def _flatten_sources(self, sources: Any) -> List[Dict[str, Any]]:
+        flat = []
+        if isinstance(sources, list):
+            for item in sources:
+                flat.extend(self._flatten_sources(item))
+        elif isinstance(sources, dict):
+            # Si el diccionario contiene una lista de documentos/fuentes
+            nested = sources.get("documents") or sources.get("sources") or sources.get("collected_docs")
+            if nested and isinstance(nested, list):
+                flat.extend(self._flatten_sources(nested))
+            else:
+                flat.append(sources)
+        return [item for item in flat if isinstance(item, dict)]
+
+    def _load_sources(self, state: SynthesizerState) -> Dict[str, Any]:
+        """Carga y normaliza todas las fuentes"""
+        source_index = {}
+        for i, source in enumerate(state.sources):
+            if not isinstance(source, dict):
+                continue
+            key = source.get("doi") or source.get("url") or f"source_{i}"
+            source_index[key] = {
+                "index": i,
+                "title": source.get("title", ""),
+                "authors": source.get("authors", []),
+                "year": source.get("year"),
+                "abstract": source.get("abstract", "")[:500],
+                "type": source.get("type", ""),
+                "source_db": source.get("source", ""),
+                "quality_score": source.get("quality_score", 0.5)
+            }
+        
+        return {"status": "sources_loaded", "source_index": source_index}
     
+    def _identify_themes(self, state: SynthesizerState) -> Dict[str, Any]:
+        """Identifica temas transversales"""
+        theme_evidence = defaultdict(list)
+        
+        for source in state.sources:
+            if not isinstance(source, dict):
+                continue
+            abstract = str(source.get("abstract", "")).lower()
+            title = str(source.get("title", "")).lower()
+            combined = title + " " + abstract
+            
+            anthropology_themes = {
+                "identidad": ["identidad", "identity", "identidades", "self", "yo", "sí mismo"],
+                "poder": ["poder", "power", "dominación", "hegemonía", "hegemony", "dominance"],
+                "cultura": ["cultura", "culture", "cultural", "prácticas", "practices", "simbólico", "symbolic"],
+                "género": ["género", "gender", "mujer", "woman", "femenino", "masculino", "feminist"],
+                "desigualdad": ["desigualdad", "inequality", "desigualdades", "brecha", "gap", "exclusión"],
+                "movilidad": ["movilidad", "mobility", "migración", "migration", "desplazamiento", "diaspora"],
+                "tecnología": ["tecnología", "technology", "digital", "redes sociales", "plataforma", "platform"],
+                "salud": ["salud", "health", "enfermedad", "disease", "medicina", "medicine", "cuidado"],
+                "educación": ["educación", "education", "escuela", "school", "aprendizaje", "learning"],
+                "ambiente": ["ambiente", "environment", "clima", "climate", "territorio", "territory"]
+            }
+            
+            for theme, keywords in anthropology_themes.items():
+                for kw in keywords:
+                    if kw in combined:
+                        theme_evidence[theme].append({
+                            "source": source.get("title", "")[:60],
+                            "year": source.get("year"),
+                            "match": kw
+                        })
+                        break
+        
+        significant_themes = {k: v for k, v in theme_evidence.items() if len(v) >= 2}
+        return {"status": "themes_identified", "patterns": {"themes": significant_themes}}
+    
+    def _triangulate(self, state: SynthesizerState) -> Dict[str, Any]:
+        """Realiza triangulación de fuentes"""
+        matrix = {
+            "by_source_type": defaultdict(int),
+            "by_year": defaultdict(int),
+            "by_database": defaultdict(int),
+            "by_quality": {"high": 0, "medium": 0, "low": 0}
+        }
+        
+        for source in state.sources:
+            if not isinstance(source, dict):
+                continue
+            stype = source.get("type", "unknown")
+            matrix["by_source_type"][stype] += 1
+            
+            year = source.get("year")
+            if year:
+                matrix["by_year"][str(year)] += 1
+            
+            db = source.get("source", "unknown")
+            matrix["by_database"][db] += 1
+            
+            score = source.get("quality_score", 0.5)
+            if score >= 0.7:
+                matrix["by_quality"]["high"] += 1
+            elif score >= 0.4:
+                matrix["by_quality"]["medium"] += 1
+            else:
+                matrix["by_quality"]["low"] += 1
+        
+        matrix["by_source_type"] = dict(matrix["by_source_type"])
+        matrix["by_year"] = dict(matrix["by_year"])
+        matrix["by_database"] = dict(matrix["by_database"])
+        
+        return {"status": "triangulated", "triangulation_matrix": matrix}
+    
+    def _detect_contradictions(self, state: SynthesizerState) -> Dict[str, Any]:
+        """Detecta contradicciones entre fuentes"""
+        contradictions = []
+        opposition_pairs = [
+            ("aumenta", "disminuye"), ("crece", "decrece"), ("positivo", "negativo"),
+            ("beneficio", "riesgo"), ("avance", "retroceso"), ("inclusión", "exclusión"),
+            ("moderno", "tradicional"), ("global", "local"), ("central", "periférico")
+        ]
+        
+        valid_sources = [s for s in state.sources if isinstance(s, dict)]
+        for i, source_a in enumerate(valid_sources):
+            for j, source_b in enumerate(valid_sources):
+                if i >= j:
+                    continue
+                text_a = str(source_a.get("title", "")) + " " + str(source_a.get("abstract", ""))
+                text_b = str(source_b.get("title", "")) + " " + str(source_b.get("abstract", ""))
+                text_a_low = text_a.lower()
+                text_b_low = text_b.lower()
+                
+                for pos, neg in opposition_pairs:
+                    if (pos in text_a_low and neg in text_b_low) or (neg in text_a_low and pos in text_b_low):
+                        contradictions.append({
+                            "source_a": source_a.get("title", "")[:50],
+                            "source_b": source_b.get("title", "")[:50],
+                            "opposition": f"{pos} vs {neg}",
+                            "severity": "moderate"
+                        })
+                        break
+        
+        years = sorted(set(s.get("year") for s in valid_sources if s.get("year")))
+        gaps = []
+        if len(years) > 1:
+            for i in range(len(years) - 1):
+                if years[i+1] - years[i] > 3:
+                    gaps.append(f"{years[i]}-{years[i+1]}")
+        
+        return {
+            "status": "contradictions_detected",
+            "contradictions": contradictions[:20],
+            "temporal_gaps": gaps
+        }
+    
+    def _generate_synthesis(self, state: SynthesizerState) -> Dict[str, Any]:
+        """Genera reporte de síntesis final"""
+        valid_sources = [s for s in state.sources if isinstance(s, dict)]
+        total_sources = len(valid_sources)
+        themes = state.patterns.get("themes", {}) if isinstance(state.patterns, dict) else {}
+        contradictions = state.contradictions
+        
+        main_themes = sorted(themes.items(), key=lambda x: len(x[1]) if isinstance(x[1], list) else 1, reverse=True)[:5]
+        
+        synthesis = {
+            "total_sources_analyzed": total_sources,
+            "main_themes": [{"theme": t, "evidence_count": len(ev) if isinstance(ev, list) else 1} for t, ev in main_themes],
+            "contradictions_found": len(contradictions),
+            "temporal_coverage": {
+                "earliest": min((s.get("year") for s in valid_sources if s.get("year")), default=None),
+                "latest": max((s.get("year") for s in valid_sources if s.get("year")), default=None)
+            },
+            "source_diversity": {
+                "databases": list(set(s.get("source", "") for s in valid_sources if s.get("source"))),
+                "types": list(set(s.get("type", "") for s in valid_sources if s.get("type")))
+            },
+            "confidence_score": self._calculate_confidence(state),
+            "recommendations": self._generate_recommendations(state)
+        }
+        
+        return {"status": "synthesis_complete", "synthesis_report": synthesis}
+
     def _build_graph(self) -> StateGraph:
         """Construye el grafo de LangGraph para el flujo del agente"""
-        
-        def load_sources(state: SynthesizerState) -> Dict[str, Any]:
-            """Carga y normaliza todas las fuentes"""
-            # Indexar fuentes por título, autor, año
-            source_index = {}
-            for i, source in enumerate(state.sources):
-                key = source.get("doi") or source.get("url") or f"source_{i}"
-                source_index[key] = {
-                    "index": i,
-                    "title": source.get("title", ""),
-                    "authors": source.get("authors", []),
-                    "year": source.get("year"),
-                    "abstract": source.get("abstract", "")[:500],
-                    "type": source.get("type", ""),
-                    "source_db": source.get("source", ""),
-                    "quality_score": source.get("quality_score", 0.5)
-                }
-            
-            return {"status": "sources_loaded", "source_index": source_index}
-        
-        def identify_themes(state: SynthesizerState) -> Dict[str, Any]:
-            """Identifica temas transversales"""
-            # Extraer temas de abstracts y datos codificados
-            theme_evidence = defaultdict(list)
-            
-            for source in state.sources:
-                abstract = source.get("abstract", "").lower()
-                title = source.get("title", "").lower()
-                combined = title + " " + abstract
-                
-                # Temas predefinidos relevantes para antropología
-                anthropology_themes = {
-                    "identidad": ["identidad", "identity", "identidades", "self", "yo", "sí mismo"],
-                    "poder": ["poder", "power", "dominación", "hegemonía", "hegemony", "dominance"],
-                    "cultura": ["cultura", "culture", "cultural", "prácticas", "practices", "simbólico", "symbolic"],
-                    "género": ["género", "gender", "mujer", "woman", "femenino", "masculino", "feminist"],
-                    "desigualdad": ["desigualdad", "inequality", "desigualdades", "brecha", "gap", "exclusión"],
-                    "movilidad": ["movilidad", "mobility", "migración", "migration", "desplazamiento", "diaspora"],
-                    "tecnología": ["tecnología", "technology", "digital", "redes sociales", "plataforma", "platform"],
-                    "salud": ["salud", "health", "enfermedad", "disease", "medicina", "medicine", "cuidado"],
-                    "educación": ["educación", "education", "escuela", "school", "aprendizaje", "learning"],
-                    "ambiente": ["ambiente", "environment", "clima", "climate", "territorio", "territory"]
-                }
-                
-                for theme, keywords in anthropology_themes.items():
-                    for kw in keywords:
-                        if kw in combined:
-                            theme_evidence[theme].append({
-                                "source": source.get("title", "")[:60],
-                                "year": source.get("year"),
-                                "match": kw
-                            })
-                            break
-            
-            # Filtrar temas con al menos 2 fuentes
-            significant_themes = {k: v for k, v in theme_evidence.items() if len(v) >= 2}
-            
-            return {"status": "themes_identified", "themes": significant_themes}
-        
-        def triangulate(state: SynthesizerState) -> Dict[str, Any]:
-            """Realiza triangulación de fuentes"""
-            matrix = {
-                "by_source_type": defaultdict(int),
-                "by_year": defaultdict(int),
-                "by_database": defaultdict(int),
-                "by_quality": {"high": 0, "medium": 0, "low": 0}
-            }
-            
-            for source in state.sources:
-                # Por tipo
-                stype = source.get("type", "unknown")
-                matrix["by_source_type"][stype] += 1
-                
-                # Por año
-                year = source.get("year")
-                if year:
-                    matrix["by_year"][str(year)] += 1
-                
-                # Por base de datos
-                db = source.get("source", "unknown")
-                matrix["by_database"][db] += 1
-                
-                # Por calidad
-                score = source.get("quality_score", 0.5)
-                if score >= 0.7:
-                    matrix["by_quality"]["high"] += 1
-                elif score >= 0.4:
-                    matrix["by_quality"]["medium"] += 1
-                else:
-                    matrix["by_quality"]["low"] += 1
-            
-            # Convertir defaultdicts a dicts normales
-            matrix["by_source_type"] = dict(matrix["by_source_type"])
-            matrix["by_year"] = dict(matrix["by_year"])
-            matrix["by_database"] = dict(matrix["by_database"])
-            
-            return {"status": "triangulated", "triangulation_matrix": matrix}
-        
-        def detect_contradictions(state: SynthesizerState) -> Dict[str, Any]:
-            """Detecta contradicciones entre fuentes"""
-            contradictions = []
-            
-            # Comparar títulos/abstracts para encontrar oposiciones temáticas
-            opposition_pairs = [
-                ("aumenta", "disminuye"), ("crece", "decrece"), ("positivo", "negativo"),
-                ("beneficio", "riesgo"), ("avance", "retroceso"), ("inclusión", "exclusión"),
-                ("moderno", "tradicional"), ("global", "local"), ("central", "periférico")
-            ]
-            
-            for i, source_a in enumerate(state.sources):
-                for j, source_b in enumerate(state.sources):
-                    if i >= j:
-                        continue
-                    text_a = source_a.get("title", "") + " " + source_a.get("abstract", "")
-                    text_b = source_b.get("title", "") + " " + source_b.get("abstract", "")
-                    text_a_low = text_a.lower()
-                    text_b_low = text_b.lower()
-                    
-                    for pos, neg in opposition_pairs:
-                        if (pos in text_a_low and neg in text_b_low) or (neg in text_a_low and pos in text_b_low):
-                            contradictions.append({
-                                "source_a": source_a.get("title", "")[:50],
-                                "source_b": source_b.get("title", "")[:50],
-                                "opposition": f"{pos} vs {neg}",
-                                "severity": "moderate"
-                            })
-                            break
-            
-            # Detectar gaps (años sin publicaciones)
-            years = sorted(set(s.get("year") for s in state.sources if s.get("year")))
-            gaps = []
-            if len(years) > 1:
-                for i in range(len(years) - 1):
-                    if years[i+1] - years[i] > 3:
-                        gaps.append(f"{years[i]}-{years[i+1]}")
-            
-            return {
-                "status": "contradictions_detected",
-                "contradictions": contradictions[:20],  # Limitar
-                "temporal_gaps": gaps
-            }
-        
-        def generate_synthesis(state: SynthesizerState) -> Dict[str, Any]:
-            """Genera reporte de síntesis final"""
-            total_sources = len(state.sources)
-            themes = state.patterns.get("themes", {})
-            contradictions = state.contradictions
-            
-            # Hallazgos principales
-            main_themes = sorted(themes.items(), key=lambda x: len(x[1]), reverse=True)[:5]
-            
-            synthesis = {
-                "total_sources_analyzed": total_sources,
-                "main_themes": [{"theme": t, "evidence_count": len(ev)} for t, ev in main_themes],
-                "contradictions_found": len(contradictions),
-                "temporal_coverage": {
-                    "earliest": min((s.get("year") for s in state.sources if s.get("year")), default=None),
-                    "latest": max((s.get("year") for s in state.sources if s.get("year")), default=None)
-                },
-                "source_diversity": {
-                    "databases": list(set(s.get("source", "") for s in state.sources)),
-                    "types": list(set(s.get("type", "") for s in state.sources))
-                },
-                "confidence_score": self._calculate_confidence(state),
-                "recommendations": self._generate_recommendations(state)
-            }
-            
-            return {"status": "synthesis_complete", "synthesis_report": synthesis}
-        
         workflow = StateGraph(SynthesizerState)
         
-        workflow.add_node("load", load_sources)
-        workflow.add_node("themes", identify_themes)
-        workflow.add_node("triangulate", triangulate)
-        workflow.add_node("contradictions", detect_contradictions)
-        workflow.add_node("synthesize", generate_synthesis)
+        workflow.add_node("load", self._load_sources)
+        workflow.add_node("identify_themes", self._identify_themes)
+        workflow.add_node("triangulate", self._triangulate)
+        workflow.add_node("contradictions", self._detect_contradictions)
+        workflow.add_node("synthesize", self._generate_synthesis)
         
         workflow.set_entry_point("load")
-        workflow.add_edge("load", "themes")
-        workflow.add_edge("themes", "triangulate")
+        workflow.add_edge("load", "identify_themes")
+        workflow.add_edge("identify_themes", "triangulate")
         workflow.add_edge("triangulate", "contradictions")
         workflow.add_edge("contradictions", "synthesize")
         workflow.add_edge("synthesize", END)
@@ -281,7 +288,7 @@ class SynthesizerAgent:
         if len(contradictions) > 5:
             recs.append("Explorar las contradicciones identificadas como oportunidad analítica")
         
-        gaps = state.contradictions.get("temporal_gaps", [])
+        gaps = state.contradictions.get("temporal_gaps", []) if isinstance(state.contradictions, dict) else []
         if gaps:
             recs.append(f"Completar periodos con baja producción: {', '.join(gaps[:3])}")
         
@@ -302,8 +309,31 @@ class SynthesizerAgent:
         Returns:
             Dict con reporte de síntesis y triangulación
         """
-        self.state.sources = sources
-        self.state.coded_data = coded_data or []
+        if isinstance(sources, dict):
+            src_list = (
+                sources.get("documents")
+                or sources.get("sources")
+                or sources.get("collected_docs")
+                or [sources]
+            )
+        elif isinstance(sources, list):
+            src_list = sources
+        elif sources is not None:
+            src_list = [sources]
+        else:
+            src_list = []
+
+        if isinstance(coded_data, dict):
+            coded_list = coded_data.get("clusters") or coded_data.get("coded_segments") or [coded_data]
+        elif isinstance(coded_data, list):
+            coded_list = coded_data
+        elif coded_data is not None:
+            coded_list = [coded_data]
+        else:
+            coded_list = []
+
+        self.state.sources = self._flatten_sources(src_list)
+        self.state.coded_data = coded_list
         self.state.status = "running"
         
         try:
@@ -320,6 +350,12 @@ class SynthesizerAgent:
             self.state.status = "error"
             logger.error(f"Error en Synthesizer: {e}")
             return {"status": "error", "error": str(e)}
+
+    async def synthesize(self, patterns: Any = None, sources: Any = None, **kwargs: Any) -> Dict[str, Any]:
+        """
+        Método de síntesis que acepta patrones y fuentes (usado por orchestrator y scripts).
+        """
+        return await self.run(sources=sources, coded_data=patterns)
     
     async def apply_grounded_theory(self, data: List[str]) -> Dict[str, Any]:
         """Aplica Grounded Theory a un conjunto de datos"""

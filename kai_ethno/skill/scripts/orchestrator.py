@@ -72,6 +72,7 @@ class KAIEthnoOrchestrator:
         self.archivist = ArchivistAgent()
 
         # Estado del pipeline
+        self._initialized = False
         self.pipeline_state: Dict[str, Any] = {}
         self.execution_log: List[Dict[str, Any]] = []
 

@@ -14,12 +14,28 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
+class EthnographProcessResult(list):
+    """
+    Subclase de list que también soporta .get() para ser compatible tanto con
+    código que espera List[Dict] (como analyze_ethnographic_data.py)
+    como código que espera un Dict (como orchestrator.py / pattern_finder.analyze).
+    """
+    def __init__(self, items: list = None, raw_dict: dict = None):
+        super().__init__(items or [])
+        self.raw_dict = raw_dict or {}
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key in ("processed_materials", "documents", "materials", "processed_data"):
+            return list(self)
+        return self.raw_dict.get(key, default)
+
+
 class EthnographState(BaseModel):
     """Estado del agente Ethnograph"""
     raw_materials: List[Dict[str, Any]] = Field(default_factory=list)
     processed_data: List[Dict[str, Any]] = Field(default_factory=list)
     coded_segments: List[Dict[str, Any]] = Field(default_factory=list)
-    themes: Dict[str, List[str]] = Field(default_factory=dict)
+    themes: Dict[str, Any] = Field(default_factory=dict)
     analysis_type: str = "mixed_methods"
     status: str = "idle"
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -265,6 +281,39 @@ class EthnographAgent:
             self.state.status = "error"
             logger.error(f"Error en Ethnograph: {e}")
             return {"status": "error", "error": str(e)}
+
+    async def process_corpus(
+        self,
+        sources: Any = None,
+        language: str = "es",
+        anonymize_pii: bool = True,
+        materials: Any = None,
+        analysis_type: str = "mixed_methods",
+        **kwargs: Any
+    ) -> EthnographProcessResult:
+        """
+        Procesa un corpus de fuentes/materiales etnográficos.
+        Retorna EthnographProcessResult (list subclass con soporte para .get()).
+        """
+        input_data = sources if sources is not None else materials
+        if isinstance(input_data, dict):
+            raw_list = (
+                input_data.get("documents")
+                or input_data.get("sources")
+                or input_data.get("collected_docs")
+                or input_data.get("materials")
+                or [input_data]
+            )
+        elif isinstance(input_data, list):
+            raw_list = input_data
+        elif input_data is not None:
+            raw_list = [input_data]
+        else:
+            raw_list = []
+
+        res = await self.run(materials=raw_list, analysis_type=analysis_type)
+        processed_list = res.get("processed_materials", [])
+        return EthnographProcessResult(processed_list, raw_dict=res)
     
     def _normalize_text(self, text: str) -> str:
         """Normalización básica de texto"""
