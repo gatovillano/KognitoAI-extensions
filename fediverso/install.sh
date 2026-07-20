@@ -6,6 +6,11 @@
 
 set -e
 
+# Re-attach stdin to terminal if piped via curl | bash
+if [ ! -t 0 ] && [ -c /dev/tty ]; then
+    exec < /dev/tty
+fi
+
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
@@ -21,16 +26,30 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${BOLD}🧩 Instalador de Extensión: Fediverso${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-# 1. Detect target KognitoAI directory (prioritizing the home directory installation)
+# 1. Detect target KognitoAI directory
 DEFAULT_REPO_DIR="${HOME}/KognitoAI"
 if [ ! -d "${DEFAULT_REPO_DIR}" ] && [ -f "${KOGNITO_CONFIG}" ]; then
     CONFIG_REPO_DIR=$(grep -E '^KOGNITO_REPO_DIR=' "${KOGNITO_CONFIG}" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
     DEFAULT_REPO_DIR="${CONFIG_REPO_DIR:-${DEFAULT_REPO_DIR}}"
 fi
 
+if [ ! -d "${DEFAULT_REPO_DIR}" ] && [ -d "${HOME}/Proyectos/KognitoAI" ]; then
+    DEFAULT_REPO_DIR="${HOME}/Proyectos/KognitoAI"
+fi
+
+if [ ! -d "${DEFAULT_REPO_DIR}" ] && [ -f "${PWD}/run_api.py" ]; then
+    DEFAULT_REPO_DIR="${PWD}"
+fi
+
 echo -e "  Instalación de Kognito AI detectada: ${BOLD}${DEFAULT_REPO_DIR}${NC}"
-printf "  ¿Instalar en esta ruta? [S/n]: "
-read -r CONFIRM_PATH
+CONFIRM_PATH="s"
+if [ -t 0 ]; then
+    printf "  ¿Instalar en esta ruta? [S/n]: "
+    read -r CONFIRM_INPUT
+    if [ -n "${CONFIRM_INPUT}" ]; then
+        CONFIRM_PATH="${CONFIRM_INPUT}"
+    fi
+fi
 
 if [[ "${CONFIRM_PATH}" =~ ^[nN]$ ]]; then
     printf "  Por favor ingresa la ruta de destino: "
@@ -75,8 +94,7 @@ fi
 
 PYTHON="${KOGNITO_DIR}/venv_host/bin/python"
 if [ ! -f "${PYTHON}" ]; then
-    echo -e "${RED}❌ No se encontró el entorno virtual en ${KOGNITO_DIR}/venv_host.${NC}"
-    exit 1
+    PYTHON=$(command -v python3 || command -v python)
 fi
 
 # 4. Prompt Option Menu (or auto-select via argument)
@@ -85,7 +103,7 @@ if [ "$1" == "--uninstall" ]; then
     OPTION="2"
 fi
 
-if [ -z "${OPTION}" ]; then
+if [ -z "${OPTION}" ] && [ -t 0 ]; then
     echo ""
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "  ${GREEN}1)${NC} 🌐 Instalar Fediverso Extension"
@@ -97,7 +115,7 @@ if [ -z "${OPTION}" ]; then
 fi
 
 case "${OPTION}" in
-    1)
+    1|"")
         echo -e "\n${GREEN}🚀 Instalando extensión Fediverso...${NC}"
         (cd "${KOGNITO_DIR}" && PYTHONPATH=. "${PYTHON}" "${TARGET_FEDIVERSO_DIR}/install.py")
         ;;
@@ -117,4 +135,3 @@ case "${OPTION}" in
         (cd "${KOGNITO_DIR}" && PYTHONPATH=. "${PYTHON}" "${TARGET_FEDIVERSO_DIR}/install.py")
         ;;
 esac
-
