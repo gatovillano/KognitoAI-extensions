@@ -164,7 +164,7 @@ def _inject_backend_router():
             )
         else:
             # Fallback: insertar después de la última línea de include_router conocida
-            fallback_anchor = 'app.include_router(openai_router, prefix="", tags=["openai-compatible"])'
+            fallback_anchor = 'app.include_router(public_api_router, prefix="", tags=["openai-compatible"])'
             if fallback_anchor in content:
                 content = content.replace(
                     fallback_anchor,
@@ -370,6 +370,19 @@ def _restart_local_servers():
     print("  ⚠ No se encontró script de reinicio. Reinicia manualmente si es necesario.")
 
 
+def _ensure_env_config():
+    env_file = os.path.join(BASE_DIR, ".env")
+    if os.path.exists(env_file):
+        with open(env_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        if "NEXT_PUBLIC_JITSI_DOMAIN" not in content:
+            with open(env_file, "a", encoding="utf-8") as f:
+                f.write('\n# --- Jitsi Meet Extension ---\nNEXT_PUBLIC_JITSI_DOMAIN="meet.kognitoai.cloud"\n')
+            print("  ✓ NEXT_PUBLIC_JITSI_DOMAIN configurada en .env.")
+        else:
+            print("  ✓ NEXT_PUBLIC_JITSI_DOMAIN ya configurada en .env.")
+
+
 def install():
     print("🚀 Instalando extensión Jitsi Meet para KognitoAI...")
     print(f"   Directorio base detectado: {BASE_DIR}")
@@ -390,21 +403,25 @@ def install():
     _create_migration()
     _run_migration()
 
-    # 3. Frontend
+    # 3. Environment Config
+    _ensure_env_config()
+
+    # 4. Frontend
     _copy_frontend_component()
     _create_meet_page()
     _inject_sidebar()
 
-    # 4. Backend
+    # 5. Backend
     _install_backend()
     _inject_backend_router()
 
-    # 5. Build & Restart
+    # 6. Build & Restart
     _run_build()
     _restart_local_servers()
 
     print("\n🎉 Extensión Jitsi Meet instalada correctamente.")
     print("   Accede al panel desde /meet en el dashboard.")
+
 
 
 def uninstall():

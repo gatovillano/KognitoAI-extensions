@@ -21,7 +21,7 @@ import {
   X,
 } from 'lucide-react';
 
-const JITSI_DOMAIN = process.env.NEXT_PUBLIC_JITSI_DOMAIN || 'meet.jit.si';
+const JITSI_DOMAIN = process.env.NEXT_PUBLIC_JITSI_DOMAIN || 'meet.kognitoai.cloud';
 const JITSI_DOMAIN_CLEAN = JITSI_DOMAIN.replace(/^(https?:\/\/)/, '');
 const JITSI_PROTOCOL = JITSI_DOMAIN.startsWith('http://')
   ? 'http'
